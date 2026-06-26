@@ -78,7 +78,7 @@ struct MyApp: App {
         BillDog.shared.configure(
             config: BillDogConfig(
                 apiKey: "your_api_key",
-                enableLogging = true,
+                enableLogging: true,
                 environment: .production
             )
         )
@@ -158,18 +158,30 @@ import BillDogPaywall
 
 struct ContentView: View {
     @State private var showPaywall = false
+    @State private var paywallConfig: PaywallConfiguration?
     
     var body: some View {
         Button("Show Premium") {
-            showPaywall = true
+            Task {
+                do {
+                    paywallConfig = try await BillDog.shared.fetchPaywall(identifier: "premium_offer")
+                    showPaywall = true
+                } catch {
+                    print("Failed to fetch paywall: \(error)")
+                }
+            }
         }
         .sheet(isPresented: $showPaywall) {
-            PaywallSheet(
-                paywallIdentifier: "premium_offer",
-                onDismiss: {
-                    showPaywall = false
-                }
-            )
+            if let config = paywallConfig {
+                PaywallView(
+                    configuration: config,
+                    onButtonPress: { componentId, action in
+                        if action == "dismiss" {
+                            showPaywall = false
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -456,7 +468,7 @@ notifications.setConsentRequired(true)
 notifications.setConsentGiven(true)
 
 // Sync Device token
-notifications.pushSubscription.setDeviceToken(deviceToken)
+notifications.pushSubscription.updateToken(deviceToken)
 ```
 
 </details>
