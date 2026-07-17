@@ -26,13 +26,13 @@ let package = Package(
         // Precompiled binary targets for the closed-source SDK release
         .binaryTarget(
             name: "BillDog",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.0.0-beta.1/BillDog.xcframework.zip",
-            checksum: "a462a1b8e258f719d5697deee218a46edb72a2cc2b99ccb460a3544738b74f8a"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.0.0-beta.2/BillDog.xcframework.zip",
+            checksum: "0d020cb6630fa75ed45e17ac5bc23faf5527ee44d3040343baa3becf9aab4d5b"
         ),
         .binaryTarget(
             name: "BillDogEng",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.0.0-beta.1/BillDogEng.xcframework.zip",
-            checksum: "a3ac4d35e0bf481841d835e8f2f781bc2175e27a5e0797d2a73875d03b576bf9"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.0.0-beta.2/BillDogEng.xcframework.zip",
+            checksum: "963609762f475308b5bc1eea3ee1d89d6a6c8f5e5f36ff4b3ef1df13664f9d23"
         )
     ]
 )
