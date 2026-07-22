@@ -2,75 +2,94 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/billdogai/billdog-ios-spm?include_prereleases&label=beta)](https://github.com/billdogai/billdog-ios-spm/releases)
 [![Swift](https://img.shields.io/badge/Swift-5.7+-orange.svg)](https://swift.org)
-[![Platforms](https://img.shields.io/badge/Platforms-iOS%2014+%20%7C%20macOS%2011+-blue.svg)](https://developer.apple.com)
+[![Platforms](https://img.shields.io/badge/Platforms-iOS%2015+-blue.svg)](https://developer.apple.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **In-App Messaging**, and **Surveys** into a single, modular package.
+BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
+
+Current release: **`1.0.0-beta.2`**
 
 ---
 
 ## 🏗️ Architecture
 
-BillDog is designed with a **highly modular, lightweight architecture**. Developers can import only what they need to keep their app binaries lightweight (e.g. core-only for custom UI, or specific modules for surveys).
+This repository distributes the SDK as **binary XCFrameworks**. There are two products — pick exactly one per target:
 
-We distribute two primary Swift Package targets:
-1. **`BillDog`** - Full monetization, paywall rendering, offline caching, and engagement suite (recommended).
-2. **`BillDogEng`** - Lightweight engagement suite only (no StoreKit, Lottie, or native Paywall dependencies).
+| Product | Use when | Import |
+| :--- | :--- | :--- |
+| **`BillDogFull`** | You need paywalls, StoreKit purchases, offline caching, and the engagement suite. | `import BillDogFull` |
+| **`BillDogEng`** | Engagement only — no StoreKit, no Lottie, no paywall rendering. | `import BillDogEng` |
 
-### Modules Overview
+> **Each product ships as ONE Swift module.** Sub-module imports such as `import BillDogAnalytics` or `import BillDogPaywall` are **not** available to binary consumers — every public type lives in the single `BillDogFull` / `BillDogEng` module. A single import gives you the whole surface.
 
-| Module | Description | Included in `BillDog` | Included in `BillDogEng` |
-| :--- | :--- | :---: | :---: |
-| **`BillDogCore`** | Foundation layers: configuration, identity, consent, and dynamic variables. | ✅ | ✅ |
-| **`BillDogPaywall`** | SwiftUI native rendering library for paywall configurations. | ✅ | ❌ |
-| **`BillDogCaching`** | Offline-first prefetching, storage, and compression manager. | ✅ | ❌ |
-| **`BillDogWebView`** | WebView rendering engine for complex HTML/CSS paywalls. | ✅ | ❌ |
-| **`BillDogSurvey`** | In-app surveys with logic branching and FlowForkAI routing. | ✅ | ✅ |
-| **`BillDogAnalytics`** | Batch events, screen views, and user properties collector. | ✅ | ✅ |
-| **`BillDogABTest`** | Feature flags, variant mapping, and FlowForkAI A/B split routing. | ✅ | ✅ |
-| **`BillDogNotifications`**| Push notification delivery, deep link mapping, and opt-in prompts. | ✅ | ✅ |
-| **`BillDogInAppMessages`** | Trigger-based modal banners and promotional announcements. | ✅ | ✅ |
-| **`BillDogVirtualCurrency`**| Server-synced wallet balance and balance drops manager. | ✅ | ❌ |
+> **`BillDogFull` was called `BillDog` before `1.0.0-beta.2`.** The product and module were renamed because `BillDogPaywall` declares a `public class BillDog`, and a module of the same name made the binary unimportable ([swiftlang/swift#56573](https://github.com/swiftlang/swift/issues/56573)). **The class is unchanged** — `BillDog.shared.…` still works everywhere. Only the import moved:
+> ```diff
+> - import BillDog
+> + import BillDogFull
+> ```
+
+> The two products **cannot be linked into the same target** — the SDK emits a compile-time `#error` if both compilation conditions are set.
+
+### Capability matrix
+
+| Capability | `BillDogFull` | `BillDogEng` |
+| :--- | :---: | :---: |
+| **Core** — configuration, identity, consent, dynamic values | ✅ | ✅ |
+| **Paywall** — SwiftUI native paywall rendering + StoreKit 2 purchases | ✅ | ❌ |
+| **Caching** — offline-first paywall/survey/asset cache | ✅ | ❌ |
+| **WebView** — HTML/CSS paywall renderer + preload pool | ✅ | ❌ |
+| **Survey** — in-app surveys with branching logic | ✅ | ✅ |
+| **Analytics** — events, autocapture, super properties, user properties | ✅ | ✅ |
+| **Session Replay** — screenshot-based replay with privacy masking | ✅ | ✅ |
+| **A/B Test & Feature Flags** — `BillDogABTestManager` | ❌ | ✅ |
+| **Notifications** — push tokens, consent, deep links | ✅ | ✅ |
+| **In-App Messages** — trigger-based modals and banners | ✅ | ✅ |
+| **Virtual Currency** — server-synced wallet balances | ✅ | ❌ |
+
+> **Why A/B Test is excluded from `BillDogFull`:** `BillDogABTest` declares its own `ExperimentAssignment` type that conflicts with the one in `BillDogPaywall`. It has never been reachable through the full-suite umbrella. Paywall-side experiments are driven by the paywall module itself; `BillDogEng` keeps the standalone experiment/flag manager.
 
 ---
 
-## 📦 Installation & Setup
+## 📦 Installation
 
-### Swift Package Manager (Recommended)
-
-Add BillDog to your `Package.swift` dependency array:
+### Swift Package Manager
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.0.0-beta.1")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.0.0-beta.2")
 ]
 ```
 
-Or in Xcode:
-1. **File** → **Add Package Dependencies**
-2. Enter: `https://github.com/billdogai/billdog-ios-spm.git`
-3. Select version `1.0.0-beta.1` and add to your target.
+Then add **one** product to your target:
+
+```swift
+.target(name: "MyApp", dependencies: [
+    .product(name: "BillDogFull", package: "billdog-ios-spm")   // or "BillDogEng"
+])
+```
+
+In Xcode:
+
+1. **File** → **Add Package Dependencies…**
+2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
+3. Choose **Exact Version** `1.0.0-beta.2` (pre-release versions are not picked up by "Up to Next Major").
+4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
+
+`BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.
 
 ### CocoaPods
 
-Add the following to your `Podfile`:
-
-```ruby
-pod 'BillDog', '1.0.0-beta.1'
-```
+Not published yet. The beta is SPM-only.
 
 ---
 
-## 🚀 Core Quick-Start
+## 🚀 Quick Start — `BillDogFull`
 
-### 1. Initialize the SDK
-Initialize the SDK once at application startup (typically in your `AppDelegate` or `@main` App struct):
+Configure once at launch, then register the optional modules you use.
 
 ```swift
 import SwiftUI
-import BillDogPaywall
-// If using optional modules
-import BillDogAnalytics
+import BillDogFull
 
 @main
 struct MyApp: App {
@@ -82,93 +101,129 @@ struct MyApp: App {
                 environment: .production
             )
         )
-        
-        // Register optional modules (e.g. Analytics)
-        let analytics = BillDogAnalytics()
-        BillDog.shared.use(module: analytics)
+
+        // Optional modules are opt-in — register the ones you need.
+        BillDog.shared.use(module: BillDogAnalyticsManager())
+        BillDog.shared.use(module: BillDogNotificationsManager.shared)
+        BillDog.shared.use(module: BillDogInAppMessagesManager.shared)
+        BillDog.shared.use(module: BillDogVirtualCurrencyManager.shared)
+        BillDog.shared.use(module: BillDogCachingManager())
+        BillDog.shared.use(module: BillDogWebViewManager.shared)
     }
-    
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+        WindowGroup { ContentView() }
     }
 }
 ```
 
-### 2. Customer Identity & Entitlements
-Manage user state and check subscription access:
+### Identity & entitlements
 
 ```swift
-// Identify user (links anonymous sessions to database accounts)
+// Identify a user — links the anonymous session to an account.
 Task {
-    do {
-        let result = try await BillDog.shared.identify(userId: "user_uuid_123")
-        print("User identified: \(result.customerInfo.entitlements.active.keys)")
-    } catch {
-        print("Identity failed: \(error)")
-    }
+    let result = try await BillDog.shared.identify(userId: "user_uuid_123")
+    print("New user? \(result.isNewUser)")
+    print("Premium? \(result.customerInfo.hasEntitlement("premium"))")
 }
 
-// Check active entitlements (cached values)
+// Read cached entitlement state at any time.
 Task {
-    do {
-        let customerInfo = try await BillDog.shared.getCustomerInfo()
-        if customerInfo.entitlements.active.keys.contains("premium") {
-            // Unlock premium content
-        }
-    } catch {
-        print("Failed to get customer info: \(error)")
+    let customerInfo = try await BillDog.shared.getCustomerInfo()
+    if customerInfo.hasEntitlement("premium") {
+        // Unlock premium content
     }
+    // Also available:
+    //   customerInfo.hasActiveSubscription        -> Bool
+    //   customerInfo.entitlements                 -> [EntitlementInfo]
+    //   customerInfo.activeSubscriptions          -> [String]
 }
 
-// Reset identity on logout
+// Reset identity on logout.
 BillDog.shared.logOut()
 ```
 
-### 3. GDPR Privacy Controls
-Opt-out of data tracking via the registered analytics module:
+### Privacy controls
+
+Consent is server-authoritative and lives on the core facade:
 
 ```swift
-import BillDogAnalytics
+BillDog.shared.setConsentRequired(true)
+BillDog.shared.setConsentGiven(true)
+```
 
-if let analytics = BillDog.shared.getModules().first(where: { $0 is BillDogAnalytics }) as? BillDogAnalytics {
-    // Opt-out of analytics and session tracking
-    analytics.optOut()
-    
-    // Opt-back in
-    analytics.optIn()
-}
+Analytics opt-out is per-module:
+
+```swift
+let analytics = BillDog.shared.getModules()
+    .compactMap { $0 as? BillDogAnalyticsManager }
+    .first
+
+analytics?.optOut()   // stop collection
+analytics?.optIn()    // resume
 ```
 
 ---
 
-## 🔌 Feature Modules Reference
+## 🚀 Quick Start — `BillDogEng`
+
+`BillDogEng` does **not** contain the `BillDog` facade class (it lives in the paywall module). Configure each manager directly:
+
+```swift
+import BillDogEng
+
+let config = BillDogConfig(apiKey: "your_api_key", enableLogging: true, environment: .production)
+
+let analytics = BillDogAnalyticsManager()
+analytics.configure(config: config)
+
+let abTest = BillDogABTestManager()
+abTest.configure(config: config)
+
+BillDogNotificationsManager.shared.configure(config: config)
+BillDogInAppMessagesManager.shared.configure(config: config)
+```
+
+Feature flags and experiments (engagement product only):
+
+```swift
+await abTest.fetchExperiments()
+
+if abTest.getFeatureFlag("new_onboarding") {
+    // flag is on
+}
+
+let variant = abTest.getFeatureFlagVariant("checkout_copy")     // String?
+let payload = abTest.getFeatureFlagPayload("checkout_copy")     // Any?
+
+let assignment = await abTest.getVariant(experimentId: "exp_123")
+abTest.trackImpression(experimentId: "exp_123")
+abTest.trackConversion(experimentId: "exp_123", value: 9.99)
+```
+
+---
+
+## 🔌 Feature Reference
 
 <details>
-<summary>💳 Paywalls & Billing (BillDogPaywall / BillDogWebView)</summary>
+<summary>💳 Paywalls &amp; Billing — <code>BillDogFull</code> only</summary>
 <br>
 
-### Present Paywall (SwiftUI Sheet)
-Present a pre-built dynamic paywall:
+### Present a paywall (SwiftUI)
 
 ```swift
 import SwiftUI
-import BillDogPaywall
+import BillDogFull
 
 struct ContentView: View {
     @State private var showPaywall = false
     @State private var paywallConfig: PaywallConfiguration?
-    
+
     var body: some View {
         Button("Show Premium") {
             Task {
-                do {
-                    paywallConfig = try await BillDog.shared.fetchPaywall(identifier: "premium_offer")
-                    showPaywall = true
-                } catch {
-                    print("Failed to fetch paywall: \(error)")
-                }
+                paywallConfig = try? await BillDog.shared.fetchPaywall(identifier: "premium_offer")
+                showPaywall = paywallConfig != nil
             }
         }
         .sheet(isPresented: $showPaywall) {
@@ -176,9 +231,7 @@ struct ContentView: View {
                 PaywallView(
                     configuration: config,
                     onButtonPress: { componentId, action in
-                        if action == "dismiss" {
-                            showPaywall = false
-                        }
+                        if action == "dismiss" { showPaywall = false }
                     }
                 )
             }
@@ -187,260 +240,251 @@ struct ContentView: View {
 }
 ```
 
-### Present Paywall (UIKit View Controller)
+`PaywallView` also accepts `offering:`, `trialEligibility:`, and `enableLogging:` — all optional.
+
+### Present a paywall (UIKit)
+
+Every `PaywallPresentationHandler` callback is a closure property; all are optional.
 
 ```swift
 BillDog.shared.presentPaywall(
     identifier: "premium_monthly",
     from: self,
     handler: PaywallPresentationHandler(
-        onPresent: { paywall in
-            print("Paywall presented: \(paywall.identifier)")
-        },
-        onDismiss: { result in
-            switch result {
-            case .purchased:
-                print("Purchased!")
-            case .dismissed:
-                print("Dismissed")
-            }
+        willAppear: { paywallId in print("about to show \(paywallId)") },
+        onPresent:  { paywallId in print("presented \(paywallId)") },
+        onDismiss:  { paywallId in print("dismissed \(paywallId)") },
+        onError:    { error in print("failed: \(error)") },
+        onSkip:     { reason in print("skipped: \(reason)") },
+        onPurchaseSuccess: { productId in
+            .dismiss   // PostPurchaseBehavior
         }
     )
 )
 ```
 
-### Custom Billing Integration (PurchaseController)
-If you manage transactions yourself (e.g. Custom Stripe, Paddle, or In-House backend):
+### Purchases
 
 ```swift
-class MyPurchaseController: PurchaseControllerProtocol {
-    func purchase(productId: String) async throws -> PurchaseResult {
-        // Trigger Stripe or custom billing request
-        return .purchased(transactionId: "custom_tx", productId: productId, isRestore: false)
-    }
-    
-    func restore() async throws -> PurchaseResult {
-        return .restored(transactionId: "custom_restore", productId: "pro", isRestore: true)
-    }
-}
+// By product id
+let result = try await BillDog.shared.purchase(productId: "pro_yearly")
 
-BillDog.shared.configure(
-    config: BillDogConfig(apiKey: "..."),
-    purchaseController: MyPurchaseController()
-)
-```
+// By package from an offering
+let result = try await BillDog.shared.purchase(package: package)
 
-### Advanced Purchase Parameters (StoreKit 2)
-Fine-grained parameters for Apple App Store transactions:
-
-```swift
+// Advanced StoreKit 2 parameters
 let params = PurchaseParams.Builder(productId: "pro_yearly")
     .with(promoOfferId: "intro_2024")
     .with(winBackOfferId: "winback_30off")
     .with(appAccountToken: UUID())
-    .with(isPersonalizedOffer: true) // EEA disclosure
+    .with(quantity: 1)
+    .with(isPersonalizedOffer: true)   // EEA disclosure
     .build()
 
 let result = try await BillDog.shared.purchase(params: params)
+
+switch result {
+case .purchased(let transactionId, let productId, _): break
+case .restored(let transactionId, let productId, _):  break
+case .cancelled:                                      break   // never surfaced as .failed
+case .pending:                                        break   // Ask-to-Buy / deferred
+case .failed(let error):                              break
+}
+
+// Restore
+let restore = try await BillDog.shared.restorePurchases()   // RestoreResult
 ```
 
-### JSON-First Rendering Architecture
-BillDog uses a **JSON-first rendering architecture** to optimize paywall display:
+### Custom billing (Stripe, Paddle, in-house)
 
-| Tier | Renderer | Best For |
-|------|----------|----------|
-| **Native** | SwiftUI | Best performance, JSON-to-native conversion |
-| **WebView** | HTML/CSS | Complex CSS features |
+```swift
+final class MyPurchaseController: PurchaseControllerProtocol {
+    func purchase(productId: String) async throws -> PurchaseResult {
+        // Run your own billing flow.
+        // Map user cancellation to .cancelled and deferrals to .pending — never .failed.
+        return .purchased(transactionId: "custom_tx", productId: productId)
+    }
 
-#### Supported Component Types
-- **Text** - Headers, titles, descriptions
-- **Image** - Hero images, icons, logos
-- **Button** - Purchase CTAs, dismiss buttons
-- **Stack** - Vertical/horizontal layouts
-- **Package** - Subscription package cards
-- **Price** - Formatted pricing display
-- **Icon** - SF Symbols support
-- **Video** - Product videos
+    func restorePurchases() async throws -> RestoreResult {
+        return .restored(items: [])
+    }
+}
+
+BillDog.shared.configure(
+    config: BillDogConfig(apiKey: "your_api_key"),
+    purchaseController: MyPurchaseController()
+)
+```
+
+### Rendering tiers
+
+| Tier | Renderer | Best for |
+| :--- | :--- | :--- |
+| **Native** | SwiftUI | Best performance; JSON-to-native conversion |
+| **WebView** | HTML/CSS | Complex CSS-only effects |
+
+Supported component types: Text, Image, Button, Stack, Package, Price, Icon (SF Symbols), Video.
 
 </details>
 
 <details>
-<summary>📊 Product Analytics (BillDogAnalytics)</summary>
+<summary>⚡ Offerings &amp; Caching — <code>BillDogFull</code> only</summary>
 <br>
 
-### Custom Event Tracking
-Track custom user interaction events via the simplified facade or the direct module:
+```swift
+let offerings: [Offering] = try await BillDog.shared.fetchOfferings()
+```
+
+`fetchOfferings()` takes no arguments — it returns every offering configured for the project, resolved against the local cache. Use `OfferingManager` directly if you need `forceRefresh`.
+
+Cache statistics come from the caching module instance you registered:
 
 ```swift
-// Facade track
+let caching = BillDogCachingManager()
+BillDog.shared.use(module: caching)
+
+let stats = caching.getCacheStats()
+print("paywalls: \(stats.paywallCount), surveys: \(stats.surveyCount)")
+print("assets: \(stats.assetCount), bytes: \(stats.totalSizeBytes)")
+print("renderer cached: \(stats.rendererCached) @ \(stats.rendererVersion ?? "—")")
+```
+
+Other cache controls: `clearPaywallCaches()`, `clearSurveyCaches()`, `clear()`, `getCachedPaywallAgeMs(identifier:)`.
+
+</details>
+
+<details>
+<summary>📊 Product Analytics — both products</summary>
+<br>
+
+The analytics class is **`BillDogAnalyticsManager`**. With `BillDogFull` you can also use the facade shortcut:
+
+```swift
 BillDog.shared.trackEvent("song_played", properties: [
     "genre": "synthwave",
     "duration_seconds": 240
 ])
 ```
 
-### Super Properties
-Super properties are automatically attached to every outgoing event:
+Everything else goes through the manager instance:
 
 ```swift
-import BillDogAnalytics
+let analytics = BillDogAnalyticsManager()   // register it via BillDog.shared.use(module:)
 
-if let analytics = BillDog.shared.getModules().first(where: { $0 is BillDogAnalytics }) as? BillDogAnalytics {
-    // Register super properties
-    analytics.registerSuperProperties(["app_version": "1.4.2"])
-    
-    // Register super properties ONLY if not already set
-    analytics.registerSuperPropertiesOnce(["initial_referrer": "google"])
-    
-    // Unregister a specific super property
-    analytics.unregisterSuperProperty("initial_referrer")
-    
-    // Clear all super properties
-    analytics.clearSuperProperties()
-}
-```
+// Super properties — attached to every outgoing event
+analytics.registerSuperProperties(["app_version": "1.4.2"])
+analytics.registerSuperPropertiesOnce(["initial_referrer": "google"])
+analytics.unregisterSuperProperty("initial_referrer")
+analytics.clearSuperProperties()
 
-### Advanced User Property Operations
-Update user cohort profiles dynamically:
-
-```swift
+// User properties
 analytics.setUserProperties(["tier": "vip"])
 analytics.incrementUserProperty("songs_count", by: 1.0)
 analytics.unionUserProperty("favorite_genres", values: ["rock", "jazz"])
-```
 
-### Identity Aliasing (Linking Identities)
-Link an anonymous session/identity to an identified user:
-
-```swift
-// Link current distinct ID to a new user account ID
+// Identity
+analytics.identify(userId: "user_uuid_123")
 analytics.alias(newId: "user_uuid_123", previousId: analytics.getDistinctId())
-```
-
-### Manual Queue Flushing & Distinct ID
-Control event dispatching and read the active identifier:
-
-```swift
-// Get current active Distinct ID
 let distinctId = analytics.getDistinctId()
 
-// Trigger manual queue flush to send events to server immediately
+// Queue control
 analytics.flush()
-```
+await analytics.flushAsync()
 
-### Event Duration Tracking (Timed Events)
-Record duration for actions (e.g. how long a checkout flow took):
-
-```swift
-// Start timer
+// Timed events — emits a "$duration" property (seconds)
 analytics.timeEvent("level_completed")
-
-// ... some time passes ...
-
-// Emits event with a "$duration" property (in seconds)
+// … later …
 analytics.track(event: BillDogAnalyticsEvent(name: "level_completed", properties: ["level_number": 5]))
 ```
 
-### Event Filtering & Transformation (Analytics Plugins)
-Intercept, modify, or drop events before queueing (PostHog's `beforeSend` equivalent):
+### Autocapture &amp; exceptions
+
+All off by default.
 
 ```swift
-class DataMaskingPlugin: AnalyticsPlugin {
+analytics.enableSessionTracking()
+analytics.enableScreenTracking()
+analytics.enableAutocapture(AutocaptureConfig(enabled: true, maskAllText: true))
+analytics.enableExceptionAutocapture()
+```
+
+`AutocaptureConfig(enabled:maskAllText:maskAllInputs:ignoreClasses:)` — `maskAllInputs` defaults to `true`.
+
+### Plugins — intercept, modify, or drop events
+
+```swift
+final class DataMaskingPlugin: AnalyticsPlugin {
     func process(event: BillDogAnalyticsEvent) -> BillDogAnalyticsEvent? {
+        if event.name == "debug_event" { return nil }        // drop
+
         var properties = event.properties
-        
-        // Example: Drop event if it meets a criteria
-        if event.name == "debug_event" { return nil }
-        
-        // Example: Mask property values
         if properties.keys.contains("email") {
             properties["email"] = "[REDACTED]"
         }
-        
         return BillDogAnalyticsEvent(name: event.name, properties: properties, timestamp: event.timestamp)
     }
 }
 
-// Add the custom plugin to the analytics flow
 analytics.addPlugin(DataMaskingPlugin())
 ```
 
-### Privacy-Preserving Autocapture & Exceptions
-Observe app usage while staying compliant with App Store privacy guidelines (Off by default):
+</details>
+
+<details>
+<summary>📹 Session Replay — both products</summary>
+<br>
+
+Screenshot-based replay with interaction capture. Off by default; every privacy knob defaults to **masked**.
+
+With `BillDogFull`, use the facade handle:
 
 ```swift
-// Opt-in to automatic session & screen tracking
-analytics.enableSessionTracking()
-analytics.enableScreenTracking()
+var options = BillDogReplayOptions(projectId: "your_project_id")
+options.triggerMode  = .session          // or .bufferUntilError
+options.quality      = .medium
+options.maskAllText  = true              // default
+options.maskAllImages = true             // default
 
-// Enable tap autocapture with text redaction (prevents sensitive input leak)
-analytics.enableAutocapture(AutocaptureConfig(enabled: true, maskAllText: true))
-
-// Enable crash tracking (auto-emits $exception events without breaking crash-reporter tools)
-analytics.enableExceptionAutocapture()
+BillDog.shared.replay.configure(options)
+BillDog.shared.replay.start()
 ```
+
+Handle API: `start()`, `stop()`, `markCheckpoint(_:metadata:)`, `linkIdentity(distinctId:)`, `capture(reason:)`, `skipCurrentScreen()`, `maskView(_:)`, `unmaskView(_:)`, `optIntoCapture()`, `openLocalViewer()`.
+
+With `BillDogEng`, drive `BillDogReplayManager` directly.
+
+### Privacy masking
+
+* Mask a view programmatically: `BillDog.shared.replay.maskView(mySensitiveView)`
+* Or set the view's `accessibilityIdentifier` to `billdog-replay-mask` (`billdog-replay-unmask` opts back in).
+* Mask whole classes via `options.maskedClassNames` / `unmaskedClassNames`.
+* Secure text entry fields are masked automatically.
 
 </details>
 
 <details>
-<summary>📹 Session Replay (BillDogReplay)</summary>
+<summary>💬 In-App Messages — both products</summary>
 <br>
 
-Captures screen flows on an interval and touchscreen interactions (Off by default).
-
-### Setup and Configure Replay
-Ensure snapshots link back to the core session:
-
 ```swift
-let replay = BillDog.shared.replay
-replay.configure(
-    BillDogReplayOptions(
-        triggerMode: .session,
-        maskAllText: true,
-        maskAllImages: true
-    )
-)
+let messages = BillDogInAppMessagesManager.shared
 
-// Start recording
-replay.start()
-```
+// Evaluate and display messages matching a trigger
+messages.checkForMessages(trigger: "checkout_abandoned", properties: ["cart_value": 49.99])
 
-### Privacy Masking
-* Mark UIKit views programmatically: `replay.maskView(mySensitiveView)`
-* Mark views that should not be captured at all with accessibilityIdentifier `billdog-replay-mask`.
-* Secure password entry fields are automatically masked out-of-the-box.
-
-</details>
-
-<details>
-<summary>💬 In-App Messaging (BillDogInAppMessages)</summary>
-<br>
-
-Trigger trigger-based engagement events configured on the BillDog dashboard:
-
-```swift
-import BillDogInAppMessages
-
-let messages = BillDogInAppMessages.shared
-
-// Display message matching the triggers
-messages.checkForMessages(trigger: "checkout_abandoned")
-
-// Suppress message display during critical user flows
+// Suppress display during critical flows
 messages.paused = true
 ```
 
 </details>
 
 <details>
-<summary>📝 Surveys (BillDogSurvey)</summary>
+<summary>📝 Surveys — both products</summary>
 <br>
 
-Present surveys with custom branching logic from a UIKit View Controller or SwiftUI host:
+With `BillDogFull`:
 
 ```swift
-import BillDogSurvey
-
 if let presenter = BillDog.getSurveyPresenter() {
     presenter.present(
         surveyId: "onboarding_survey",
@@ -450,45 +494,46 @@ if let presenter = BillDog.getSurveyPresenter() {
 }
 ```
 
+Full signature: `present(surveyId:from:handler:customerId:anonymousId:customVariables:interceptConfig:)` — everything after `from:` is optional. Pass a `SurveyPresentationHandler` for `onPresent` / `onDismiss` / `onComplete` / `onError` / `onAnswerChanged`.
+
+With `BillDogEng`, construct `BillDogSurveyPresenter(surveyManager:)` yourself.
+
 </details>
 
 <details>
-<summary>🔔 Push Notifications (BillDogNotifications)</summary>
+<summary>🔔 Push Notifications — both products</summary>
 <br>
 
-Manage notification tokens, opt-in consent, and deep link routing:
-
 ```swift
-import BillDogNotifications
+let notifications = BillDogNotificationsManager.shared
 
-let notifications = BillDogNotifications.shared
-
-// Set marketing consents
+// Marketing consent
 notifications.setConsentRequired(true)
 notifications.setConsentGiven(true)
 
-// Sync Device token
-notifications.pushSubscription.updateToken(deviceToken)
+// Sync the APNs device token (String form)
+notifications.pushSubscription.updateToken(tokenString)
+
+// Opt out of push without clearing the token
+notifications.pushSubscription.optOut()
 ```
+
+`pushSubscription` requires iOS 15+.
 
 </details>
 
 <details>
-<summary>🪙 Virtual Currency (BillDogVirtualCurrency)</summary>
+<summary>🪙 Virtual Currency — <code>BillDogFull</code> only</summary>
 <br>
 
-Sync and grant server-side wallet balances:
+Server-backed wallet; local storage is a read-through cache only.
 
 ```swift
-import BillDogVirtualCurrency
+let wallet = BillDogVirtualCurrencyManager.shared
 
-let wallet = BillDogVirtualCurrency.shared
+let balance: Double = try await wallet.getBalance(currencyId: "gems")
 
-// Get balance
-let balance = try await wallet.getBalance(currencyId: "gems")
-
-// Grant currency drops locally (syncs to server)
-let newBalance = try await wallet.grantCurrency(
+let newBalance: Double = try await wallet.grantCurrency(
     currencyId: "gems",
     amount: 50,
     reason: "daily_reward"
@@ -497,71 +542,18 @@ let newBalance = try await wallet.grantCurrency(
 
 </details>
 
-<details>
-<summary>🛠️ Debug & Diagnostics (BillDogDebug / BillDogDebugDashboard)</summary>
-<br>
-
-Access logging controls and show the developer diagnostics overlay:
-
-```swift
-import BillDogDebugDashboard
-
-// Show debug diagnostics dashboard
-BillDogDebugDashboard.show(from: self, mode: .developer)
-
-// Enable shake gesture to trigger diagnostics dashboard
-BillDogDebugDashboard.enableShakeToShow(in: window, mode: .support)
-```
-
-</details>
-
----
-
-## ⚡ Offerings & Caching Guides
-
-### List Offerings
-Fetch all offerings with advanced filtering and pagination:
-
-```swift
-let result = try await BillDog.shared.fetchOfferings(
-    limit: 20,
-    filters: OfferingsFilters(
-        isCurrent: true,
-        identifier: nil
-    ),
-    expand: [.packages, .paywall],
-    sortBy: "created_at",
-    sortOrder: "desc"
-)
-```
-
-### Advanced Caching System
-BillDog iOS SDK includes a production-grade caching system for optimal performance:
-- **GZIP Compression** - Reduces disk storage size by up to 60%.
-- **Multi-Level Storage** - In-memory, UserDefaults, and FileManager caching layer.
-- **Smart Prefetching** - Preloads paywalls based on user engagement predictions.
-
-```swift
-// Check cache hit rate and storage analytics
-if let analytics = PaywallCacheManager.shared.getAnalytics() {
-    print("Hit Rate: \(analytics.hitRate * 100)%")
-    print("Avg Load Time: \(analytics.avgLoadTime)ms")
-}
-```
-
 ---
 
 ## Requirements
 
-- iOS 14.0+ / macOS 11.0+
-- Xcode 14.0+
+- **iOS 15.0+** — the published XCFrameworks ship device and simulator slices only; there is no macOS slice.
+- Xcode 15.0+
 - Swift 5.7+
 
 ## Support
 
 - 📖 [Documentation](https://billdog.io/docs)
-- 💬 [Discord Community](https://discord.gg/billdog)
-- ✉️ Email: support@billdog.io
+- ✉️ support@billdog.io
 
 ## License
 
