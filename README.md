@@ -41,12 +41,10 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 | **Survey** — in-app surveys with branching logic | ✅ | ✅ |
 | **Analytics** — events, autocapture, super properties, user properties | ✅ | ✅ |
 | **Session Replay** — screenshot-based replay with privacy masking | ✅ | ✅ |
-| **A/B Test & Feature Flags** — `BillDogABTestManager` | ❌ | ✅ |
+| **A/B Test & Feature Flags** — `BillDogABTestManager` | ✅ | ✅ |
 | **Notifications** — push tokens, consent, deep links | ✅ | ✅ |
 | **In-App Messages** — trigger-based modals and banners | ✅ | ✅ |
 | **Virtual Currency** — server-synced wallet balances | ✅ | ❌ |
-
-> **Why A/B Test is excluded from `BillDogFull`:** `BillDogABTest` declares its own `ExperimentAssignment` type that conflicts with the one in `BillDogPaywall`. It has never been reachable through the full-suite umbrella. Paywall-side experiments are driven by the paywall module itself; `BillDogEng` keeps the standalone experiment/flag manager.
 
 ---
 
