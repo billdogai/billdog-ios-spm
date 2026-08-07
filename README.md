@@ -46,6 +46,10 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 | **In-App Messages** — trigger-based modals and banners | ✅ | ✅ |
 | **Virtual Currency** — server-synced wallet balances | ✅ | ❌ |
 
+> **A/B Test & feature flags:** `BillDogABTestManager` is the single, canonical experiment / feature-flag surface, reachable through both `import BillDogFull` and `import BillDogEng` (`getVariant`, `allAssignments`, `getFeatureFlag`, `getFeatureFlagVariant`, `getFeatureFlagPayload`, `trackImpression`, `trackConversion`).
+>
+> A redundant paywall-facade shim — `confirmAllAssignments()` / `getExperimentOverrides()` / `forceExperimentVariant()` / `clearExperimentOverrides()` plus a duplicate paywall `getFeatureFlag` / `reloadFeatureFlags` cache — was **removed**. Use `BillDogABTestManager` for all experiments and feature flags.
+
 ---
 
 ## 📦 Installation
@@ -182,7 +186,7 @@ BillDogNotificationsManager.shared.configure(config: config)
 BillDogInAppMessagesManager.shared.configure(config: config)
 ```
 
-Feature flags and experiments (engagement product only):
+Feature flags and experiments (available in both `BillDogFull` and `BillDogEng`):
 
 ```swift
 await abTest.fetchExperiments()
