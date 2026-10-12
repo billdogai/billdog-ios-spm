@@ -35,6 +35,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 | Capability | `BillDogFull` | `BillDogEng` |
 | :--- | :---: | :---: |
 | **Core** — configuration, identity, consent, dynamic values | ✅ | ✅ |
+| **Auth** — authentication, hosted auth cards, sessions, and token refresh | ✅ | ✅ |
 | **Paywall** — SwiftUI native paywall rendering + StoreKit 2 purchases | ✅ | ❌ |
 | **Caching** — offline-first paywall/survey/asset cache | ✅ | ❌ |
 | **WebView** — HTML/CSS paywall renderer + preload pool | ✅ | ❌ |
@@ -588,11 +589,8 @@ let newBalance: Double = try await wallet.grantCurrency(
 Sign-in, sessions and second factors, in the app. The refresh token is held in
 the **Keychain**; the session token stays in memory and is refreshed for you.
 
-> **Requires `1.1.0-beta.3`.** The published `BillDogFull`/`BillDogEng` binaries
-> are at `1.0.0-beta.2`, released 2026-08-08 — fifteen days before the
-> `BillDogAuth` module was written. It is not in that XCFramework at all, so
-> `pod install` at beta.2 resolves a binary with no auth in it. Everything in
-> this section needs the beta.3 publish.
+> **Available in `1.1.0-beta.3` and later.** Precompiled `BillDogFull` and `BillDogEng`
+> XCFramework binaries include `BillDogAuth` out of the box with zero additional configuration.
 
 `BillDogAuth` is re-exported by both umbrellas, so `import BillDogFull` or
 `import BillDogEng` is enough. On `BillDogEng` it registers itself. On
