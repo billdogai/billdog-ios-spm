@@ -7,7 +7,7 @@
 
 BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
-Current release: **`1.0.0-beta.2`**
+Current release: **`1.1.0-beta.3`**
 
 ---
 
@@ -58,7 +58,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.0.0-beta.2")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.0-beta.3")
 ]
 ```
 
@@ -74,7 +74,7 @@ In Xcode:
 
 1. **File** → **Add Package Dependencies…**
 2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
-3. Choose **Exact Version** `1.0.0-beta.2` (pre-release versions are not picked up by "Up to Next Major").
+3. Choose **Exact Version** `1.1.0-beta.3` (pre-release versions are not picked up by "Up to Next Major").
 4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
 
 `BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.
@@ -164,6 +164,18 @@ let analytics = BillDog.shared.getModules()
 analytics?.optOut()   // stop collection
 analytics?.optIn()    // resume
 ```
+
+`optOut()` also stops session replay recording, not only its upload, and it
+covers both recorders: the `$snapshot` recorder (`BillDogReplayManager`) and the
+video recorder (`BillDog.shared.replay`). Frames, touches and chunks are
+discarded, not sent, including those already waiting in an upload queue: replay
+frames queued or dead-lettered in analytics (whatever the dashboard's "Clear on
+Opt-Out" says) and video chunks waiting to upload, even when the video recorder
+was not set up in that launch. Only a request already on the wire is out of
+reach. The opt-out is persisted, so neither recorder starts on a later launch
+while the user stays opted out. `optIn()` resumes whatever the host had
+switched on as a new recording, under a new session id, with sampling rolled
+again. Nothing captured before the opt-out comes back.
 
 ---
 
@@ -297,19 +309,39 @@ case .failed(let error):                              break
 let restore = try await BillDog.shared.restorePurchases()   // RestoreResult
 ```
 
-### Custom billing (Stripe, Paddle, in-house)
+### Your own purchase flow (a `PurchaseController`)
+
+Every BillDog purchase entry point — paywall buttons, `purchase(productId:)`,
+`purchase(package:)`, `purchase(params:)`, consumables — reaches your controller.
+Your app runs StoreKit and **finishes its own transactions**; BillDog never does.
+BillDog records the purchase by posting its store evidence, which the server
+verifies with Apple. Return the evidence when you have it:
 
 ```swift
 final class MyPurchaseController: PurchaseControllerProtocol {
-    func purchase(productId: String) async throws -> PurchaseResult {
-        // Run your own billing flow.
-        // Map user cancellation to .cancelled and deferrals to .pending — never .failed.
-        return .purchased(transactionId: "custom_tx", productId: productId)
+    func purchase(request: PurchaseRequest) async throws -> PurchaseOutcome {
+        let product = try await Product.products(for: [request.params.productId]).first!
+        var options: Set<Product.PurchaseOption> = []
+        // Optional: bind the purchase to the BillDog customer.
+        if let token = request.storeAccountToken { options.insert(.appAccountToken(token)) }
+        switch try await product.purchase(options: options) {
+        case .success(let verification):
+            if case .verified(let transaction) = verification { await transaction.finish() }
+            let evidence = StoreEvidence(verification)
+            return PurchaseOutcome(.purchased(transactionId: evidence.transactionId ?? "",
+                                              productId: product.id, originalTransactionId: nil),
+                                   evidence: [evidence])
+        case .userCancelled: return PurchaseOutcome(.cancelled)   // never .failed
+        case .pending:       return PurchaseOutcome(.pending)     // Ask to Buy
+        @unknown default:    return PurchaseOutcome(.cancelled)
+        }
     }
 
-    func restorePurchases() async throws -> RestoreResult {
-        return .restored(items: [])
-    }
+    // The two original requirements still apply; `purchase(request:)` defaults to them.
+    func purchase(productId: String) async throws -> PurchaseResult { .cancelled }
+    func restorePurchases() async throws -> RestoreResult { .restored(items: []) }
+
+    var storeKitVersion: HostStoreKitVersion { .storeKit2 }   // .storeKit1 keeps BillDog's SK1 observer
 }
 
 BillDog.shared.configure(
@@ -317,6 +349,11 @@ BillDog.shared.configure(
     purchaseController: MyPurchaseController()
 )
 ```
+
+Without evidence, BillDog derives it from StoreKit by the result's transaction id.
+A request needing `quantity > 1` or a win-back offer is refused with a typed error
+unless the controller declares that capability (`capabilities`). A purchase you
+make outside a controller is recorded with `BillDog.shared.recordPurchase(verification)`.
 
 ### Rendering tiers
 
@@ -545,6 +582,99 @@ let newBalance: Double = try await wallet.grantCurrency(
 </details>
 
 ---
+
+## 🔐 BillDog Auth
+
+Sign-in, sessions and second factors, in the app. The refresh token is held in
+the **Keychain**; the session token stays in memory and is refreshed for you.
+
+> **Requires `1.1.0-beta.3`.** The published `BillDogFull`/`BillDogEng` binaries
+> are at `1.0.0-beta.2`, released 2026-08-08 — fifteen days before the
+> `BillDogAuth` module was written. It is not in that XCFramework at all, so
+> `pod install` at beta.2 resolves a binary with no auth in it. Everything in
+> this section needs the beta.3 publish.
+
+`BillDogAuth` is re-exported by both umbrellas, so `import BillDogFull` or
+`import BillDogEng` is enough. On `BillDogEng` it registers itself. On
+`BillDogFull`, register it like any other optional module:
+
+```swift
+BillDog.shared.use(module: BillDogAuth.shared)
+```
+
+### Signing in
+
+```swift
+import BillDogFull
+
+do {
+    let session = try await BillDogAuth.shared.attempt(
+        identifier: "ada@example.com",
+        strategy: .password,
+        password: password
+    )
+    print(session)
+} catch BillDogAuth.AuthError.mfaRequired(let token, _) {
+    // First factor accepted. Finish with the second, passing the token back —
+    // it is what proves the password was already verified.
+    let session = try await BillDogAuth.shared.attempt(
+        identifier: "ada@example.com",
+        strategy: .totp,
+        code: code,
+        mfaToken: token
+    )
+    print(session)
+} catch BillDogAuth.AuthError.invalidCredentials {
+    // Deliberately identical whether the identifier exists or not.
+}
+```
+
+### Passwordless, and phone numbers
+
+```swift
+// A RETURNING user gets a fresh code from requestCode. Without it a code could
+// only be obtained as a side effect of signing up.
+try await BillDogAuth.shared.requestCode(identifier: "+15551234567", kind: "phone")
+
+let session = try await BillDogAuth.shared.attempt(
+    identifier: "+15551234567",
+    kind: "phone",              // REQUIRED — see below
+    strategy: .smsCode,
+    code: code
+)
+```
+
+**`kind` selects the identity row and defaults to `"email"`.** A phone sign-in
+that omits it looks up a phone number among email addresses and silently matches
+nothing. Pass it on `requestCode`, `attempt` and `signUp` alike, and pass the
+same value to all three.
+
+### Restoring and ending a session
+
+```swift
+if let session = await BillDogAuth.shared.restore() { … }   // nil is ordinary
+BillDogAuth.shared.isSignedIn
+BillDogAuth.shared.authHeaders                              // for your own API
+await BillDogAuth.shared.signOut()                          // "this" | "others" | "all"
+```
+
+`restore()` returns `nil` rather than throwing — "not signed in" is an ordinary
+state on first launch, not an error worth a `do/catch` at every call site.
+
+### Also available
+
+`BillDogOrganizations` (create, list, members, roles, invitations, domains) and
+`BillDogPasskeys` (register and sign in with Face ID / Touch ID), both in the
+same module.
+
+### What the iOS SDK cannot do
+
+- **Sign up into a project with bot protection or `invite_only` access.**
+  `signUp` takes no captcha or invitation token, and there is no `config()` to
+  discover that the project requires one — the server answers 400. Use hosted
+  sign-in for those projects until the parameters ship.
+- **Complete a password reset.** Reachable only through a hosted sign-in page.
+- **Delete a user's own account.** Erasure runs through the operator DSAR flow.
 
 ## Requirements
 
