@@ -7,7 +7,7 @@
 
 BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
-Current release: **`1.1.0-beta.3`**
+Current release: **`1.1.1-beta.3`**
 
 ---
 
@@ -59,7 +59,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.0-beta.3")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.3")
 ]
 ```
 
@@ -75,7 +75,7 @@ In Xcode:
 
 1. **File** → **Add Package Dependencies…**
 2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
-3. Choose **Exact Version** `1.1.0-beta.3` (pre-release versions are not picked up by "Up to Next Major").
+3. Choose **Exact Version** `1.1.1-beta.3` (pre-release versions are not picked up by "Up to Next Major").
 4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
 
 `BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.
@@ -88,7 +88,7 @@ Not published yet. The beta is SPM-only.
 
 ## 🚀 Quick Start — `BillDogFull`
 
-Configure once at launch, then register the optional modules you use.
+Configure once at launch. That alone records analytics — your `trackEvent` calls and the SDK's own paywall, purchase and app-lifecycle events — because `configure()` registers the analytics module for you. Register the other optional modules you use.
 
 ```swift
 import SwiftUI
@@ -105,8 +105,7 @@ struct MyApp: App {
             )
         )
 
-        // Optional modules are opt-in — register the ones you need.
-        BillDog.shared.use(module: BillDogAnalyticsManager())
+        // Analytics is registered by configure(). The rest are opt-in.
         BillDog.shared.use(module: BillDogNotificationsManager.shared)
         BillDog.shared.use(module: BillDogInAppMessagesManager.shared)
         BillDog.shared.use(module: BillDogVirtualCurrencyManager.shared)
@@ -199,17 +198,21 @@ BillDogNotificationsManager.shared.configure(config: config)
 BillDogInAppMessagesManager.shared.configure(config: config)
 ```
 
-Feature flags and experiments (available in both `BillDogFull` and `BillDogEng`):
+Feature flags and experiments (available in both `BillDogFull` and `BillDogEng`). With `BillDogFull`, `BillDog.shared.abTest` is the manager — created on first use, evaluated for the SDK's current identity (no `setUserId` needed). It is not created at `configure()` because its fetch enrols the user in every running experiment.
 
 ```swift
-await abTest.fetchExperiments()
+let abTest = BillDog.shared.abTest     // BillDogFull; with BillDogEng, the manager configured above
 
-if abTest.getFeatureFlag("new_onboarding") {
+// Wait for this launch's flags (default timeout 5 s). false: timed out or
+// failed, and the getters answer from the previous launch's cache.
+await abTest.waitForFlags()
+
+if abTest.getFeatureFlag(key: "new_onboarding") {
     // flag is on
 }
 
-let variant = abTest.getFeatureFlagVariant("checkout_copy")     // String?
-let payload = abTest.getFeatureFlagPayload("checkout_copy")     // Any?
+let variant = abTest.getFeatureFlagVariant(key: "checkout_copy")     // String?
+let payload = abTest.getFeatureFlagPayload(key: "checkout_copy")     // Any?
 
 let assignment = await abTest.getVariant(experimentId: "exp_123")
 abTest.trackImpression(experimentId: "exp_123")
@@ -406,10 +409,10 @@ BillDog.shared.trackEvent("song_played", properties: [
 ])
 ```
 
-Everything else goes through the manager instance:
+Everything else goes through the manager instance — with `BillDogFull`, the one `configure()` registered:
 
 ```swift
-let analytics = BillDogAnalyticsManager()   // register it via BillDog.shared.use(module:)
+guard let analytics = BillDog.shared.analytics else { return }   // nil only before configure()
 
 // Super properties — attached to every outgoing event
 analytics.registerSuperProperties(["app_version": "1.4.2"])
@@ -436,6 +439,8 @@ analytics.timeEvent("level_completed")
 // … later …
 analytics.track(event: BillDogAnalyticsEvent(name: "level_completed", properties: ["level_number": 5]))
 ```
+
+To use an instance of your own (a custom store directory, or your own `AnalyticsModuleInterface` pipeline), pass it to `BillDog.shared.use(module:)` at launch: registered before `configure()`, the SDK registers none; registered after, it replaces the SDK's, which stops recording and leaves its queued events to yours.
 
 ### Autocapture &amp; exceptions
 
