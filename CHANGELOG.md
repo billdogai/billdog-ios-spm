@@ -5,6 +5,94 @@ All notable changes to the BillDog iOS SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A purchase through `BillDogSuperwallIntegration` is attributed to the BillDog offering behind the Superwall paywall on screen, when `SuperwallBillDogPurchaseController(offeringMap:)` names it (Superwall paywall identifier → BillDog offering identifier). Superwall presents its own paywall, so no BillDog paywall was on screen and a product sold in more than one offering (experiment arms, a seasonal offering) was credited to the first loaded offering selling it — the wrong offering and placement. A purchase with no mapped paywall on screen, or whose mapped offering is not loaded or does not sell the product, is attributed as before (the last two log a warning). New: `PurchaseParams.presentedOfferingContext` (`Builder.with(presentedOfferingContext:)`) names the offering a `purchase(params:)` is attributed to, ahead of the first loaded offering selling the product, as a package's own context does (RevenueCat `PurchaseParams.Builder.presentedOfferingContext`); `SuperwallBillDogBackend` gains `purchase(params:)` and `getOffering(identifier:)`, and `SuperwallStatusSink` `presentedPaywallIdentifier` (defaulted, so existing conformers compile).
+
+## [1.1.1-beta.4] - 2026-10-24
+
+### Added
+- `BillDogConfig.showsPurchaseFailureAlert` (default `true`): when a purchase tapped on a BillDog paywall fails (not cancelled, not pending) the SDK shows an "An error occurred" alert with the error, and when a restore tapped on it finds nothing, "No Subscription Found" (Superwall `shouldShowPurchaseFailureAlert` parity). Before, the paywall stayed exactly as it was and the button looked broken. Set it to `false` if the app shows its own message from `BillDogDelegate.onPurchaseFailed` / `onRestoreCompleted`.
+- `BillDog.register(placementId:from:params:presentationHandler:)`: follow a placement's presentation live through a `PaywallPresentationHandler` (Android parity). `onSkip` reports `.userHasEntitlement`, `.holdout` and `.noPaywallConfigured`; a presented paywall reports `onPresent`, `onPurchaseSuccess` (`.keepOpen` honoured), `onRestore`, `onDismiss` and `onFinish` as they happen, each naming the placement. `PaywallPresentationHandler` gains `onLoadingStateChange` (`.loading` / `.ready` / `.failed`) and `onFinish`, which every presentation now calls.
+- `PaywallAlreadyPresentedError` (`code` `PAYWALL_ALREADY_PRESENTED`): see below.
+
+### Changed
+- A top-level presentation while a BillDog paywall is on screen, or while another is still loading, is refused: the handler's `onError` (and `register`'s `.error`) gets `PaywallAlreadyPresentedError`, the call returns `false`, and the paywall on screen is untouched. So is a presentation from a view controller that is not in a window or is already presenting. A second presentation used to overwrite the state of the paywall on screen (its Purchase button stopped working) and return `true` for a `present` UIKit refused. A wall presented from the paywall in front still stacks when it is a "Show Another Paywall" tap or `presentPaywall(wallId:from:)` (post-purchase "show paywall"); `presentPaywall(identifier:from:)` and `register` from the paywall in front no longer stack a second copy.
+- Native paywalls show trial and introductory-offer copy (`.automatic`) only to users StoreKit calls eligible; unknown eligibility counts as ineligible (RevenueCat parity). The SDK's own presentations now pass StoreKit's eligibility to the paywall; a host that builds `PaywallViewController` / `PaywallView` itself should pass `trialEligibility`.
+
+### Fixed
+- `register(placement:) async` no longer throws "timed out" while its paywall is on screen: the 30 s bound covers resolving the placement only, and the result (a purchase included) is returned whenever the paywall closes. Every hybrid bridge awaits this call.
+- A gated placement waits (at most 5 s) for the current user's customer info before deciding its gate, in `register`, `getPaywall(forPlacement:)` and `getPresentationResult(forPlacement:)`. After a cold launch nothing had loaded it, so paying subscribers were shown the paywall. If it cannot be loaded in time the request fails with an error and nothing is shown or unlocked (Superwall parity).
+- A paying subscriber who is offline at a cold launch gets through a gated placement. Each placement's last-known gate (`gated` + `required_entitlement`) is kept per user on the device; when the server cannot be reached (no connection, a lookup, connect or timeout failure — never a server answer such as the 403 withheld or a 5xx) and that gate is a gate, the customer info on the device decides it: holding the required entitlement (or any active one when it names none) reports `.entitled` / `onSkip(.userHasEntitlement)`, runs `register`'s feature closure, `getPresentationResult` says `.userSubscribed`, `getPaywall(forPlacement:)` throws `PaywallSkippedError(.userHasEntitlement)` and `hasAccessForPlacement` answers `true`. Anything else still fails as before; an ungated or never-resolved placement is never unlocked offline, and one user's gates never answer for another (Superwall falls back to its persisted config the same way). A customer restored from disk counts as known for the gate's wait also when the server names it by another of its ids.
+- A double tap on a paywall's Purchase or Restore runs it once (two `purchase_completed` events and two host callbacks before).
+- A purchase on a placement's paywall is credited to the offering, placement and experiment that paywall was presented with, also when the current offering sells the same product. `paywall_presented` carries `placement_id`.
+- A paywall kept in memory is fetched again in the background once 5 minutes old, and a paywall the server reports gone or inactive is dropped from memory and disk. A republished or unpublished paywall shown by identifier or UUID stayed as first fetched until the app was killed.
+- WebView paywalls on a non-USD storefront showed prices in US dollars: every package and its `product` now carry the store's `currencyCode` / `currency_code` and localized `price_string` / `priceString`.
+- Per-month, per-week, per-day and per-year price variables use calendar units (a year is 12 months, 52 weeks, 365 days): an annual $59.99 plan read "$4.93/mo" instead of "$5.00".
+- A downloaded renderer update is validated on its whole content; every update was rejected (the check read the first 4 KB) and re-downloaded 30 minutes later.
+
+- Customer info belongs to the user it was fetched for. `configure()` restores the current user's own cached customer info from disk before anything reads it, so `hasEntitlement`, `register` gates, `entitlementsForProduct`, `subscriptionStatus`, `customerInfo` and `getCustomerInfo()` (offline too) reflect a subscriber's access at launch; it is read from the server at launch when missing or older than five minutes. Nothing restored it: a subscriber was shown the paywall at every launch until something fetched. An answer that arrives for a user who is no longer current (a read in flight across `logOut`) is dropped instead of becoming the new user's customer info, and `logIn` / `switchUser` switch to the new user's own cached customer info (or none) before fetching, so a failed fetch no longer leaves them with the previous user's entitlements. `switchUser` keeps other users' cached customer info on disk for when they return, and `invalidateCustomerInfoCache()` (run after a web-checkout redemption) and a StoreKit refund/revocation forget only the current user's cached customer info before reading it again; they wiped every user's. `subscriptionStatus` and `customerInfo` follow the identity too: `configure`, `logIn`, `switchUser` and `logOut` show the current user's own cached customer info and status, else that user's own last-known status, else `.unknown` — never the previous user's. The last-known status is kept per app user id (it was one device-wide value, restored for whoever launched next) and every user's is wiped at `logOut`. `.cachedOrFetched` (the `getCustomerInfo()` default) refreshes in the background only when its cache is over five minutes old (RevenueCat), not on every call.
+- A purchase by product id from a paywall on screen is credited to the offering that paywall rendered. When the SKU was in more than one offering (experiment arms, a seasonal offering), it was credited to the first cached offering selling it — the wrong offering and placement, under the right `paywall_id`. An explicit package's context still wins; with no paywall on screen nothing changes. `OfferingManager.presentedContext(forProductId:renderedOffering:)` takes the rendered offering (Android parity).
+- A purchase that fails by throwing — StoreKit offline, parental controls, a storefront that does not sell the product, an unknown product, a transaction that fails verification, or a host `PurchaseController` (including `purchase(custom:)`) that throws — now calls `onPurchaseFailed` and sends `purchase_failed` once, as a returned `.failed` does (Android parity); `purchase()` still throws it. Only a recording refusal reached either. The delegate receives BillDog's failures as `BillDogError`, as for `.failed`. A cancel StoreKit throws instead of returning (`StoreKitError.userCancelled`, `SKError.paymentCancelled`), or a host controller throws (`PurchaseError.userCanceled`, `BillDogError.userCancelled`), returns `.cancelled` and calls `onPurchaseCancelled` instead of throwing; a thrown `PurchaseError.pending` returns `.pending`. Every other error StoreKit throws leaves `PurchaseManager` as a `PurchaseError` (`networkError`, or `storeKitError` with the store's code) instead of raw.
+- Journey actions across an identity change: after `logOut`, an answer to the signed-out user's poll still in flight is no longer delivered (their step reached the next guest), and a result report of a step already run is no longer cancelled by `logIn` / `switchUser` / `logOut` (its result was lost, or — with the action still marked delivered — never sent). A replaced poller's report is no longer dropped when the poller is released. `reset()` cancels every poller's unsent reports, including one queued just before it.
+- Fonts from an older paywall config's family map (`resources.fonts: { "Inter": { weights: [...] } }`) load as the server serves fonts: one face per weight, each with the Google Fonts CSS for that one weight, regular weight first. Each weight fetched the same multi-weight CSS. A family with an uploaded file is one face.
+- A tab label in a custom font draws the face of its weight (a bold tab drew the regular face). A family name with non-ASCII letters is UTF-8 encoded in the Google Fonts URL, as the server encodes it; a face's weight may be a decimal or a numeric string.
+- Session-replay uploads, the WebView survey page's API base and the notification service extension's delivery event follow the proxy (`setProxyURL`) and the environment; they used the production URL always. Relative paywall asset paths resolve against the proxy's host when one is set (`BillDogConfig.activeFunctionsBase` / `assetHostRoot`).
+- A `setProxyURL` URL that already ends in `/v1` is used as given; `/v1` was appended always, so `https://proxy.example.com/v1` became `…/v1/v1`. A bare host still gets `/v1` (`BillDogConfig.functionsBase(forProxy:)`, the same rule as Android and React Native).
+- A `configure` with no `BillDogConfig.logLevel` puts a level an earlier configure set back to the default (`.info`); it kept the old one, so a React Native or Flutter app that removed its `logLevel` (each change reconfigures) went on logging at it. A level set directly on `BillDogLogger` is left alone.
+- Analytics applies the dashboard's **Session timeout** (default 300 s): an event after that long without one, or after 24 hours, starts a new session, and returning to the app after the timeout records `$session_start` for it. The setting was read and never used; a session lasted as long as the process. The session also outlives the process: iOS suspends and kills backgrounded apps freely, and a launch within the timeout continues the visit instead of starting another. Each session gets exactly one `$session_start` — however it began (a launch, the timeout passing while the app stayed open, an opt-in) — and `$app_backgrounded` / `$session_end` durations run from the session's start. The timeout (the client override or the dashboard's) is clamped to 60 s – 24 h: 0 made every event its own session.
+- `survey_presented` was recorded twice per presentation when analytics was registered (once from the event bus, once by the survey presenter); it is recorded once, and so is `promotional_offer_not_applied`. The bus copy of `survey_completed` (recorded server-side) is no longer sent either. Bus events whose record is made elsewhere carry `BillDogEventBus.recordedElsewhere` / `RECORDED_ELSEWHERE`.
+
+### Changed — a product StoreKit does not sell fails on every key; simulating is opt-in
+- A test key used to turn "StoreKit returned no product" into a synthesized success (a
+  `sandbox_<uuid>` transaction): the app was told it purchased, its paywall closed as
+  purchased, post-purchase actions ran and `purchase_completed` was sent, while nothing was
+  charged and no entitlement was ever granted. It also hid real misconfiguration (a SKU
+  StoreKit does not sell) exactly while the app was being tested. That fallback is removed: the
+  purchase fails, on every key, with an error naming the id StoreKit was asked for and what to
+  check.
+- New: `BillDogConfig.simulatedPurchases` (default false), RevenueCat Test Store parity. On a
+  test key every purchase is simulated: no Apple sheet, nothing charged, and BillDog records it
+  on the server as a simulated SANDBOX purchase that grants its entitlements, so the app's
+  customer info matches what it was told. Results carry a `sim:` transaction id, every
+  purchase event carries `simulated: true`, and none carries revenue. Ignored with an error
+  on a live key; a `purchaseController` passed to `configure` wins over it. Needs the
+  `record-simulated-purchase` edge function.
+- A sandbox purchase is no longer also posted to `sdk-create-test-purchase` (the dashboard
+  test-store table). Real sandbox purchases are recorded once, in the purchase ledger.
+- `bd_test_` is no longer treated as a test key: the server accepts only `bd_public_test_` /
+  `bd_secret_test_` (as Android already did).
+
+### Fixed — a Paywall Builder purchase button asked StoreKit for the wrong product
+- The Builder's Purchase action names its product by the BillDog `product_identifier`
+  (`sbx-sub-monthly`), which StoreKit does not sell; the App Store SKU is
+  `app_store_product_id` (`io.billdog.sbx.sub.monthly`). Only a package identifier was mapped
+  to the SKU, so the tap queried StoreKit with the BillDog id: product-not-found on a live key,
+  and on a test key the sandbox simulator's synthesized success, with no Apple sheet and
+  nothing recorded.
+- Every purchase path now resolves its product reference to the SKU before StoreKit:
+  `purchase(productId:)`, `purchase(params:)`, `purchase(package:)`, paywall taps (native and
+  WebView), consumables, and the observer-mode `observePurchase*` calls. A SKU, a package
+  identifier, a `product_identifier` or a `products.id` all resolve, across every loaded
+  offering and the offering a placement wall sells; an id no package knows is used as given,
+  as the SKU.
+- The purchase's offering attribution, price and promotional offer follow the resolved SKU.
+- A tap with no product falls back to the wall's first package by its SKU, not its BillDog id;
+  a WebView tap naming only its `packageId` purchases that package.
+- The game-controller "select" on a native wall purchases the selected product. It sent the
+  literal `controller_select` as the product id.
+
+### Fixed — test walls and attribution follow the purchased SKU
+- Draft (`fetchPaywallDraft`) and preview-link (`fetchPreviewPaywall`) fetches now name the
+  platform, so the server serves their purchase actions by the App Store SKU, as it does for a live
+  wall. Previously only the SDK's own resolver mapped a draft or preview wall's purchase.
+- A purchase's offering attribution is resolved through the same `StoreProductReference` as the
+  purchase, then credited to the package selling that SKU. The lookup had its own matcher, which
+  knew no Builder `product_identifier` or `products.id`, so attribution and the purchased SKU
+  could disagree.
+
 ## [1.1.1-beta.3] - 2026-10-17
 
 ### Fixed — a `configure()`-only app sent no analytics
