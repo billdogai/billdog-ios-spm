@@ -7,7 +7,7 @@
 
 BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
-Current release: **`1.1.1-beta.3`**
+Current release: **`1.1.1-beta.4`**
 
 ---
 
@@ -59,7 +59,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.3")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.4")
 ]
 ```
 
@@ -75,7 +75,7 @@ In Xcode:
 
 1. **File** → **Add Package Dependencies…**
 2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
-3. Choose **Exact Version** `1.1.1-beta.3` (pre-release versions are not picked up by "Up to Next Major").
+3. Choose **Exact Version** `1.1.1-beta.4` (pre-release versions are not picked up by "Up to Next Major").
 4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
 
 `BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.
@@ -655,14 +655,25 @@ same value to all three.
 ### Restoring and ending a session
 
 ```swift
-if let session = await BillDogAuth.shared.restore() { … }   // nil is ordinary
+if let session = await BillDogAuth.shared.restore() {
+    // signed in
+} else if BillDogAuth.shared.hasStoredSession {
+    // signed in, not renewed yet (offline, or before the first unlock):
+    // stay in the signed-in experience; the SDK resumes the session itself
+} else {
+    // nobody is signed in
+}
 BillDogAuth.shared.isSignedIn
 BillDogAuth.shared.authHeaders                              // for your own API
 await BillDogAuth.shared.signOut()                          // "this" | "others" | "all"
 ```
 
-`restore()` returns `nil` rather than throwing — "not signed in" is an ordinary
-state on first launch, not an error worth a `do/catch` at every call site.
+`restore()` returns `nil` rather than throwing. `nil` alone does not mean "not
+signed in": an offline launch, or one before the device's first unlock after a
+reboot, also returns `nil` while the session is intact, and the SDK renews it by
+itself once the network is back or the Keychain unlocks. `hasStoredSession`
+(no network) tells the two apart, as Auth0's `canRenew()` does: show a sign-in
+screen only when it is `false`.
 
 ### Also available
 
