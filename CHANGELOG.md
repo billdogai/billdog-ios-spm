@@ -7,9 +7,132 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1-beta.5] - 2026-11-03
+
+### Added — the Superwall bridge ships
+
+- `BillDogSuperwallIntegration` (`SuperwallBillDogPurchaseController`, a SuperwallKit 4.x `PurchaseController` backed by BillDog) is published for the first time: SwiftPM `https://github.com/billdogai/billdog-ios-superwall.git` (product `BillDogSuperwallIntegration`, exact BillDog version) and the `BillDogSuperwallIntegration` pod. It is a separate package because SwiftPM fetches every dependency a package declares, so SuperwallKit in `billdog-ios-spm` would download into every BillDog app; apps that don't add it are unaffected. Only the bridge's two Swift files ship as source, built with the app against the SuperwallKit it resolves; the SDK stays the binary `BillDogFull`, pinned at the same version. SuperwallKit range: 4.0.3 and later 4.x (4.0.0–4.0.2 named the event type `SuperwallPlacementInfo`); Xcode 26 compiles SuperwallKit 4.14.0 and later only. Built against 4.18.3, whose `PurchaseController` is unchanged since 4.0.0.
+
+### Fixed — analytics batches name the SDK that sent them
+
+- Each ingest batch carries `lib` / `lib_version` (PostHog's `$lib` / `$lib_version`): `billdog-ios` at the SDK version, or the wrapper that runs it (`billdog-flutter`, `billdog-react-native`, `billdog-expo`, …, from `BillDogRuntime.platformInfo`) at the wrapper's version. Native rows were stored with no lib, so their `event_source` was 'other' instead of 'mobile'.
+
+### Fixed — analytics flushes when the app goes to the background
+
+- The queue is flushed on `didEnterBackground` (server `flush_on_background`, default on) and on `willTerminate` (`flush_on_close`), and the background sync is scheduled, whether or not session auto-tracking runs. Both lived in the session tracker, which is off by default, so an app on defaults sent what it tracked last only at its next launch (measured on device: 60–90 s+ late; with the fix, 1 s after Home). posthog-ios flushes on every `didEnterBackground` the same way.
+
+### Added — session replay for the wrappers
+
+- `BillDogReplayOptions.externalFrames` and `BillDog.shared.replay.appendExternalFrame(_:)`: a recording whose frames the host draws and masks itself (the Flutter SDK), encoded and uploaded like screenshots.
+- `BillDogReplayOptions.maskAllInputs` (default true): text fields stay covered when `maskAllText` is off.
+- React Native text views (`RCTParagraphComponentView`, `RCTTextView`) are masked as text by both recorders.
+
+### Changed (round 3 platform parity)
+
+- **The web-checkout return scheme is app-specific.** `WebCheckoutManager.customUrlScheme` (and the new `BillDogConfig.customUrlScheme`) default to `<bundle id>.billdog` (`CheckoutURLScheme`) instead of the `billdog` every app shared — iOS picks one app when two register a scheme, so a return or redeem link (a bearer token) could open another BillDog app. An app whose `CFBundleURLTypes` still list only `billdog` keeps using it (logged) until it adds its own; incoming `billdog://` links stay accepted in default mode. A scheme the host sets is the only one claimed.
+- **One consent path.** `ConsentManager` posts `didChangeNotification` after every write, and `BillDog` drops its kept placement answers on it, so a per-purpose grant, a module's own consent setter or a wrapper calling `ConsentManager` directly (React Native did) has the same effect as `setConsentGiven`. New facade calls `setConsent(for:granted:)` / `hasConsent(for:)` (Android parity).
+
+### Deprecated (could never work; no longer offered by any wrapper)
+
+- `BillDogVirtualCurrencyManager.addBalance`, `deductBalance`, `grantCurrency`, `exchangeCurrency` and `resetBalance` throw `BillDogError.configurationError` at once, without a request. Every wallet write needs the project's secret key and the server answers an app's publishable key 403, so they failed on every device (`/exchange` is retired server-side, and RESET is no transaction type). Virtual currencies are read-only in the client, as in RevenueCat: credit and spend from your server (`POST /v1/virtual-currency/transactions` or `/adjustments`). `getBalance` and `getTransactionHistory(currencyId:)` take a currency code as well as its id. Android: the same.
+- `BillDogNotificationsManager.addTag` / `addTags` / `removeTag` / `removeTags` / `getTags`, the alias calls, `addEmail` / `removeEmail` / `getEmails` and `addSms` / `removeSms` / `getSmsNumbers` are no-ops that log one warning; the getters return nothing. They kept their values in memory and never sent them. Tags, email and phone are contact fields only your server may write (`sync-subscriber`, secret key); an alias is `logIn(appUserId)`. Android: the same.
+
+### Added
+
+- `PaywallPresentationHandler.onOAuthSuccess` (public, also an `init` parameter) with a public `PaywallSignIn` (provider, user, email, ID token): the paywall closed after a sign-in made on it that the server verified, with no purchase or restore. Called just before `onDismiss`, from `presentPaywall` and from `register(placementId:from:params:presentationHandler:)`, which reported that close as a plain dismissal. Same shape as Android.
+
+- `BillDogEngSDK.logIn(_:)`, `identify(userId:)`, `logOut()` and `appUserId`: an engagement-only app can identify its user. Push opt-in and notification revalidation, in-app messages, A/B tests and feature flags, and store recording (the purchase's claimant, `storeAccountToken`) used to stay anonymous in BillDogEng, because only the Full facade's `logIn` set the identified user. `logOut()` leaves the install on a new guest, drops the modules' user-scoped state (flags and assignments, in-app triggers, balances, push tags) and resets analytics; a BillDog Auth sign-out in BillDogEng does the same. The identity rules both products share are in `BillDogIdentity` (BillDogCore). Android's billdog-eng has these through billdog-core.
+- Social sign-in (`OAuthManager`, `OAuthResult`, `OAuthProvider`, the hosted redirect for Google and Facebook) ships in BillDogEng: it moved from BillDogPaywall to BillDogAuth, which both products link. `import BillDogFull` and `import BillDogPaywall` still reach it unchanged.
+- Feature flags record `$feature_flag_called` (`$feature_flag`, `$feature_flag_response`, and `$feature_flag_payload` when the flag has one) once per flag value per session, from `getFeatureFlag(key:)` and `getFeatureFlagVariant(key:)`, as PostHog and the web SDK do. Flag results (MCP `get_feature_flag_results`) count only this event, so native flag results were always empty. `BillDogConfig.sendFeatureFlagEvents: false` turns it off.
+
 ### Fixed
 
+- Session replay (`BillDog.shared.replay`, video): frames were black. The capturer rendered a `snapshotView`'s layer, which draws nothing off-screen, so a recording held only the grey mask boxes. It now draws with `drawHierarchy`, as PostHog does.
+- Session replay (video): each 5 s chunk waited for its own upload before the next one opened, and frames taken in between were dropped — a 3–4 s hole after every chunk on a phone. The chunk is queued on disk and its upload started without waiting.
+- Session replay (both recorders): masks stay on moving content. Mid-scroll, `drawHierarchy` draws the frame on screen while mask rects come from the view tree, and part of a masked view showed beside its box. The masked regions are sampled twice, 25 ms apart (PostHog's settle check): unmoved, the frame is `drawHierarchy`; moved, the layer tree the masks were measured from. New in BillDogCore: `BillDogReplayMaskRegion`, `BillDogReplayMasking.masksAreStill`, `drawWindow`, `swiftUILayerMaskRegions`.
+- Session replay (`sessionReplay`, screenshots): frames were 3× the 720 px they are meant to be (~170 KB each, one `$snapshot` event per frame); now 720 px, ~27 KB.
+- Push: a tap BillDog's notification delegate recorded is not recorded again when the app also reports it with `onNotificationOpened` (from firebase_messaging's `onMessageOpenedApp`, which forwards taps through the delegate it wraps, or from its own `didReceive`). It was counted twice. The key is the BillDog notification id and the tapped button (`action_id`), held until the app reports that tap once or the module resets, as Android does (`autoRecordedOpens`).
+- `BillDogRevenueCatIntegration`: a purchase no longer fails when RevenueCat's offerings cannot be loaded. BillDog owns the paywall, so a RevenueCat project often has no offerings, and RevenueCat then fails the offerings fetch (as it does offline); that error was rethrown before the bare-product fallback ran, so nothing could be bought. The package from the offerings is still preferred (RevenueCat's offering attribution); otherwise the product is bought directly, as Android's adapter always does.
+
+- In-app messages: a fullscreen message lays its content out from the top, below the ✕. The content stack was stretched to the full screen height, so the title label took the spare height: the title floated mid-screen and the body and buttons were pushed to the bottom (and the title's frame reached under the ✕). The ✕ now has its own row, read as "Close" by VoiceOver.
 - A purchase through `BillDogSuperwallIntegration` is attributed to the BillDog offering behind the Superwall paywall on screen, when `SuperwallBillDogPurchaseController(offeringMap:)` names it (Superwall paywall identifier → BillDog offering identifier). Superwall presents its own paywall, so no BillDog paywall was on screen and a product sold in more than one offering (experiment arms, a seasonal offering) was credited to the first loaded offering selling it — the wrong offering and placement. A purchase with no mapped paywall on screen, or whose mapped offering is not loaded or does not sell the product, is attributed as before (the last two log a warning). New: `PurchaseParams.presentedOfferingContext` (`Builder.with(presentedOfferingContext:)`) names the offering a `purchase(params:)` is attributed to, ahead of the first loaded offering selling the product, as a package's own context does (RevenueCat `PurchaseParams.Builder.presentedOfferingContext`); `SuperwallBillDogBackend` gains `purchase(params:)` and `getOffering(identifier:)`, and `SuperwallStatusSink` `presentedPaywallIdentifier` (defaulted, so existing conformers compile).
+
+### Added (also in this release)
+
+- `BillDogConfig.setProxyURL(_:trustedForProofs:)` / `BillDog.shared.setProxyURL(_:trustedForProofs:)`: an opted-in proxy also gets the customer proofs (the BillDog Auth session, the device key), so customer-scoped calls such as in-app account deletion work through a proxy you run. Behind a proxy the SDK withheld them, and those calls answered `PROOF_REQUIRED`. Default `false`: unchanged. The proofs go only to the proxy's exact scheme, host and port, over https (plain http only to a loopback or private-network host in a DEBUG build of the SDK); otherwise the trust is refused and logged, and the proxy still routes. Setting the proxy again without the flag, or clearing it, withdraws the trust. `setProxyURL` returns whether the trust was granted (`@discardableResult`), and a refusal made before `configure` is logged once `configure` turns logging on.
+
+### Fixed (also in this release)
+
+#### Identity and auth
+
+- `logOut()` ends a BillDog Auth session held for the signed-in person. The new guest kept sending that session, so the server answered the guest as the signed-out person (their customer info, and any purchase, push token or attribute write), and the session stayed live. It is now signed out locally and revoked on the server, in `BillDog.logOut()` and in BillDogEng's `logOut()`.
+- `reset()` revokes the stored BillDog Auth session on the server as well as clearing it, and clears the published `customerInfo` and `configurationStatus`, as Android does. A feature-flag or customer-info answer that was in flight for the previous user is never applied to the new one; `refreshSubscriptionStatus()` published its answer with no identity check.
+- A BillDog Auth sign-in (a wall's sign-in button included) refreshes customer info at once. The SDK kept the guest's cached customer info until its next refresh, so a returning subscriber who signed in on a wall stayed unentitled and a gated `register` showed them the paywall again.
+- `getCustomerInfo(fetchPolicy: .fetchCurrent)` and `invalidateCustomerInfoCache()` publish what they fetched to `BillDog.shared.customerInfo` and `subscriptionStatus`. A grant or revoke made from the dashboard was returned by those calls but not shown in the published values until a cold relaunch.
+- `setUserAttributes` saves custom attributes on the server. Every write was answered "No attributes to update" and nothing was stored. Values are now kept on disk per user until the server has them, sent together, resent with the next write and on foreground or launch if a write failed (a rejected value is not resent), and merged on the server; `nil` removes a key, and `getUserAttributes` returns the stored values.
+- Sign in with Apple passes the name Apple discloses (only on the first authorization) to BillDog Auth, so the account keeps it. It was dropped.
+- A sign-in on a wall that fails says so on the button ("Couldn't sign in. Try again.", localizable) for a few seconds; the spinner just stopped before. A user cancel shows nothing: the SDK now tells the wall when the user cancelled.
+- When consent is required and not given, email, phone, name, custom attributes, attribution, IDFA and the push token are refused like the other identity setters, as on Android.
+- `logOut()` and every identity change report the subscription status change to the delegate, clear each module's user-scoped state, and the A/B module drops `setUserId` and reloads flags for the guest. Virtual-currency balances are cached per app user and dropped on an identity change.
+
+#### Paywalls and purchases
+
+- WebView paywalls render in the WebView. The prebuilt `BillDogFull` / `BillDogEng` frameworks (SwiftPM, CocoaPods and every wrapper) could not find the WebView renderer by name and logged "WebView rendering requested but BillDogWebView module not available. Falling back to native.", so every WebView wall was drawn by the native renderer, where a sign-in button does nothing. Response caching and the default analytics module were found the same way and are fixed too.
+- Paywall taps keep working after the page's JavaScript garbage-collects. The message bridge was lost, and every tap after that was ignored (a wall's Google sign-in button spun forever).
+- A Purchase action with no product, inside a button or package that names one, buys that product. Tapping an "Annual" button bought Monthly when its label sat in a stack with a product-less Purchase.
+- A Purchase with no product, on a wall with several packages and nothing selected, buys nothing and reports a failed purchase (logged), instead of buying the offering's first package. A wall with exactly one package still buys it.
+- A failed purchase's alert shows the SDK's message, not "The operation couldn't be completed. (BillDogFull.PurchaseError error 3.)", and a thrown `PurchaseError.userCanceled` counts as a cancellation (no alert).
+- `PurchaseResult` and `RestoredPurchase` carry `originalTransactionId`; it was always `nil`.
+- An explicit purchase always records the transaction on the server. A transaction an earlier automatic sync had been refused for was answered from the local record, so the purchase reported success without reaching the server.
+- `BillDog.shared.handleUrl(_:)` redeems web-checkout return links (`redeem/<token>`, and a success link nothing was waiting for), as `handleDeepLink` does. It answered `true` and redeemed nothing.
+- `onPaywallSkipped` is called on every `register` skip, from both variants.
+- `getPaywall` installs the SDK's paywall delegate (one you set wins), and a SwiftUI `PaywallView` with no `onButtonPress` runs Purchase and Restore itself. Its impression carries `offering_id`, `offering_identifier` and `placement_id`, as the SDK-presented paths do.
+- Cancelled, failed and pending purchase callbacks and events name the store product that was resolved.
+- `upgradeSubscription` / `downgradeSubscription` buy the sibling plan on the App Store, as the paywall does; they called a server-only endpoint and always failed. `previewSubscriptionUpgrade` is deprecated and throws a server-only error at once.
+- `register` reports `oauthSuccess` when a wall closes after a verified sign-in on it; the case was declared and never produced. A placement with no paywall fails with a typed error (`BillDogError.isNoPaywallConfigured`, `NoPaywallConfiguredError`, wire code `NO_PAYWALL_CONFIGURED`). `.proofInvalid` carries `proof` and `.purchaseOwnerConflict` carries `retryable`, as on Android.
+- A JSON or wrapper number 0 or 1 is read as a number, not a Bool: `getBalance` threw for a balance of 0, `getAllCurrencies()` dropped every currency at 0 or 1, and survey answers, offering metadata and paywall properties of 1 / 0 were sent as `true` / `false`.
+- Virtual-currency history rows keep their `metadata` and real time (fractional-second timestamps read as "now").
+- The `BillDogFull` pod and the SwiftPM package no longer add `lottie-ios`. The SDK links its own Lottie, so apps got two copies (158 "Class … is implemented in both" warnings at launch, with either copy running). An app that uses Lottie itself now adds it itself.
+
+#### Feature flags
+
+- Every flag getter starts this launch's flag fetch when none was asked for: flags read false forever on a module a wrapper registered, and flag-gated surveys were hidden. `logIn` reloads flags for the signed-in user (an answer in flight for the guest was dropped and nothing asked again, so `waitForFlags` returned false). Flag requests name the platform, SDK version and app version, so the dashboard's platform and app-version conditions match.
+- `ab_variant_assigned` is sent after the assignment is stored and carries `variant_name`, `is_control` and `config`.
+- A flag-gated survey uses the registered A/B module's flags when no resolver is set.
+
+#### Push and journeys
+
+- Push delivery and opens reach the dashboard. Each push carries one BillDog notification id; the notification service extension sends its delivery receipt before handing the content back. `NotificationClickResult.notificationId` is that BillDog id (`requestIdentifier` keeps the system id).
+- The notification service extension reads its App Group from the Info.plist key `BillDogAppGroupIdentifier` when no code sets `BillDogNotificationDeliveryConfig.appGroupIdentifier`. An extension whose principal class is `BillDogNotificationServiceExtension` itself had no way to set it, so it never reported a delivery.
+- Push action buttons work (up to three, each with a title and URL, shown through a per-push category), and a push's action URL, or the tapped button's, opens on tap; `opensActionURLOnTap = false` turns that off.
+- A tap that arrives before a click handler is set is held and given to the first handler (the latest one only); `clearClickHandler()` is new. `BillDogNotificationsManager.installLaunchHook()` installs the SDK's notification delegate while the app launches, so the tap that cold-launches the app is recorded (Info.plist opt-out `io.billdog.notifications.LAUNCH_HOOK` = `false`).
+- `optedIn` survives a relaunch: it follows the saved opt-out and the last permission read, not an in-memory flag. An opted-out install no longer turns its token back on at the next token callback.
+- The push token moves to the new customer on `logIn` / `logOut` / `switchUser`, and BillDogEng can register one: `BillDogEngSDK.setDeviceToken(_:)` (Data or hex String). `setDeviceToken(String)` on the Full facade registers the device too.
+- Post-purchase reminders are opt-in: `BillDogNotificationsManager.autoSchedulesPurchaseReminders` (default `false`). A purchase used to schedule a local renewal or expiry reminder by itself, in every app that registers the notifications module (every Flutter, React Native and Expo app). Reminders you schedule yourself are unaffected, and a purchase still cancels the reminders of what was bought.
+- The notifications module reads and writes the SDK's consent (the `messaging` purpose) instead of its own copy.
+- A journey step that arrives with no screen to show it on is kept and shown when the app becomes active; it was handed back and never delivered again. A journey survey step its gating declines is reported, instead of parking the journey until it expired.
+
+#### Session replay
+
+- Views whose accessibility identifier contains `bd-mask` are masked by the video recorder, as by the screenshot recorder and Android; a mask marker wins over an unmask. SwiftUI `Text` and `Image` are masked by both recorders, and the new `.billDogReplayMask()` modifier masks any SwiftUI view.
+- After `logOut()`, the next user's recording is stored; every chunk was refused because the previous customer stayed linked.
+
+#### In-app messages
+
+- A button tap reports `closingMessage = true` for every button (the message always closes), not only for a dismiss button.
+- A bottom-sheet message fills its sheet. It drew a second card and grabber inside an empty sheet.
+- A bottom sheet the user swipes away or taps outside is reported as dismissed. Every later message stayed queued and none showed.
+
+#### Surveys
+
+- A survey closed by swiping its sheet down or tapping outside it is abandoned and reported to `onDismiss`; the respondent stayed in progress and the app heard nothing.
+- A survey closed while its submit is still in flight is completed, not abandoned, and the app hears `onComplete` (or `onError`) before `onDismiss`.
+- Partial answers are saved one at a time, in order, and submit and abandon wait for them. Overlapping saves could store an answer twice, or lose the last page's answers on an abandon.
+- Event-triggered surveys (`registerEvent`, armed triggers) announce presented / dismissed / completed, so the wrappers' survey listeners and analytics hear them.
+- Rating questions draw the number of stars the builder set (`scale`); a 7- or 10-point rating showed 5 stars.
+- Typed answers are readable in dark mode (iOS 16 and later); they were dark text on a black box.
+- Text answers show their placeholder ("Type your thoughts here…" or the survey's own) and are labelled with the question for VoiceOver.
+- VoiceOver reads each rating star as "N of M stars" (localized) and reports which star, Yes/No, NPS and thumbs answer is selected.
 
 ## [1.1.1-beta.4] - 2026-10-24
 
