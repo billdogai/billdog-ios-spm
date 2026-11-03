@@ -7,7 +7,7 @@
 
 BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
-Current release: **`1.1.1-beta.4`**
+Current release: **`1.1.1-beta.5`**
 
 ---
 
@@ -59,7 +59,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.4")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.5")
 ]
 ```
 
@@ -75,7 +75,7 @@ In Xcode:
 
 1. **File** → **Add Package Dependencies…**
 2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
-3. Choose **Exact Version** `1.1.1-beta.4` (pre-release versions are not picked up by "Up to Next Major").
+3. Choose **Exact Version** `1.1.1-beta.5` (pre-release versions are not picked up by "Up to Next Major").
 4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
 
 `BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.

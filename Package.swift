@@ -24,21 +24,19 @@ let package = Package(
         .library(name: "BillDogFull", targets: ["BillDogFull"]),
         .library(name: "BillDogEng",  targets: ["BillDogEng"])
     ],
-    dependencies: [
-        // BillDogFull's paywall renderer imports Lottie, so it appears in that
-        // product's module interface and the consumer must resolve it too.
-        .package(url: "https://github.com/airbnb/lottie-ios.git", from: "4.4.0")
-    ],
+    // No dependencies: BillDogFull links its paywall renderer's Lottie in, and
+    //  keeps it out of the module interface.
+    // Declaring lottie-ios here put a second copy in every consuming app.
     targets: [
         .binaryTarget(
             name: "BillDogFull",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.4/BillDogFull.xcframework.zip",
-            checksum: "d859942e9108a28b0f17254d5903af413a82e21be5f6e83edebe0ceb3722bb75"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.5/BillDogFull.xcframework.zip",
+            checksum: "518311f85d952c49a65af94647cebefb7609d7eead0bc6579d0d353085458a76"
         ),
         .binaryTarget(
             name: "BillDogEng",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.4/BillDogEng.xcframework.zip",
-            checksum: "55a758623b59b4a1116f0f1498cad14f5d12b7dd0b5eb4da2c674c2bc924bbf1"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.5/BillDogEng.xcframework.zip",
+            checksum: "675071296f734e0be24a36ad0448a2c2aab082f47f5389f4fa73c89623153882"
         )
     ]
 )
