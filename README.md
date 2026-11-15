@@ -4,8 +4,9 @@
 [![Swift](https://img.shields.io/badge/Swift-5.7+-orange.svg)](https://swift.org)
 [![Platforms](https://img.shields.io/badge/Platforms-iOS%2015+-blue.svg)](https://developer.apple.com)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-billdog.io%2Fdocs%2Fios-black)](https://billdog.io/docs/ios)
 
-BillDog is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
+[BillDog](https://billdog.io) is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
 Current release: **`1.1.1-beta.5`**
 
@@ -700,6 +701,33 @@ same module.
 
 - 📖 [Documentation](https://billdog.io/docs)
 - ✉️ support@billdog.io
+
+## Documentation and resources
+
+- [iOS SDK guide](https://billdog.io/docs/ios) — install, configure and ship the full SDK
+- [iOS Eng SDK guide](https://billdog.io/docs/ios-eng) — analytics, flags, surveys and messaging without purchases
+- [Quickstart](https://billdog.io/docs/quickstart)
+- [App Store Connect setup](https://billdog.io/docs/app-store-setup) — shared secret, server notifications, StoreKit keys
+- [Paywall builder](https://billdog.io/docs/paywall-builder) — design native paywalls without an app release
+- [A/B experiments](https://billdog.io/docs/experiments) — test prices, paywalls and offers
+- [Product analytics](https://billdog.io/docs/product-analytics)
+- [Session replay](https://billdog.io/docs/session-replay)
+- [BillDog Auth](https://billdog.io/docs/auth)
+- [Migrating from RevenueCat](https://billdog.io/vs/revenuecat)
+- [Support](https://billdog.io/support) — questions, bugs and feature requests
+
+## Other BillDog SDKs
+
+| Platform | Package | Docs |
+|---|---|---|
+| iOS (Swift) | [billdog-ios-spm](https://github.com/billdogai/billdog-ios-spm) | [iOS guide](https://billdog.io/docs/ios) |
+| Android (Kotlin) | [billdog-android-full](https://github.com/billdogai/billdog-android-full) · [billdog-android-eng](https://github.com/billdogai/billdog-android-eng) | [Android guide](https://billdog.io/docs/android) |
+| React Native · Flutter · Web | npm · pub.dev | [React Native](https://billdog.io/docs/react-native) · [Flutter](https://billdog.io/docs/flutter) · [Web](https://billdog.io/docs/web) |
+| Superwall bridge (iOS) | [billdog-ios-superwall](https://github.com/billdogai/billdog-ios-superwall) | [Superwall integration](https://billdog.io/docs/superwall-integration) |
+| Server (Go, PHP, Node, Python…) | [billdogeng-go](https://github.com/billdogai/billdogeng-go) · [billdogeng-php](https://github.com/billdogai/billdogeng-php) | [Server SDKs](https://billdog.io/docs/server-sdk) |
+| AI coding agents (MCP) | [billdog-mcp](https://github.com/billdogai/billdog-mcp) | [MCP server](https://billdog.io/docs/mcp-server) |
+
+Not sure which one you need? See [choosing an SDK](https://billdog.io/docs/sdk-selection).
 
 ## License
 
