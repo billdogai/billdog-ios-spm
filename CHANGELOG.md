@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2-beta.5] - 2026-11-18
+
+### Fixed — a restore unlocks only what is active
+
+- A restore tapped on a paywall closes it and reports success only when the customer then holds an active entitlement (Superwall `RestoreFlow`); otherwise the paywall stays open with "nothing to restore". A restore lists what the store or a host controller found — the RevenueCat bridge lists every product ever bought, expired ones included — so a non-empty list no longer counts as access.
+- `register(_:from:onFeatureUnlocked:)` unlocks on a restore only when the placement's gate now passes (its required entitlement, else any active one), as RevenueCatUI's `presentPaywallIfNeeded` does.
+- RevenueCat bridge: Apple's 12-month commitment plan. A request for `X` buys the upfront plan and `X:monthly` the commitment, matched on RevenueCat's billing plan (`installmentsInfo`), never on `productIdentifier` alone (the same for both plans). A request RevenueCat can't match exactly is "product not found", never another plan.
+
+### Fixed — the RevenueCat bridge (`BillDogRevenueCatIntegration`, not yet published)
+
+- Imports `BillDogFull` only, so it builds against the published binary; RevenueCat floor 5.46.0 (the first with a public quantity API; 5.13.0 is the first with `NonSubscriptionTransaction.store`).
+- Consumables: the purchase's evidence carries Apple's signed transaction, read from RevenueCat's `StoreTransaction`, so a consumable RevenueCat finished before returning is recorded. If RevenueCat stops exposing it, configure warns unless Info.plist sets `SKIncludeConsumableInAppPurchaseHistory` (iOS 18+).
+- With RevenueCat configured `purchasesAreCompletedBy = .myApp`, BillDog finishes each transaction after its server records it (on every path: purchases, renewals, Ask to Buy approvals). Refused only when BillDog can't own finishing (`finishTransactions` off).
+- Promotional offers signed by RevenueCat, and quantity purchases.
+
+### Added — a host purchase controller can leave finishing to BillDog
+
+- `PurchaseControllerProtocol.leavesTransactionFinishingToBillDog` (default `false`): BillDog then finishes every transaction once its server has recorded it, as it does for its own controller. `BillDog.finalizationOwner` is public.
+- When BillDog owns finishing, a restored StoreKit 1 transaction (RevenueCat on StoreKit 1 with `.myApp`) is finished too. A restore delivers a StoreKit 1 copy with an id of its own, which BillDog's StoreKit 2 finish never matched, so it was delivered again on every launch. Its evidence comes from StoreKit's history, so finishing the copy loses nothing.
+- `PurchaseCapabilities.signsPromotionalOffers`: a controller that signs promotional offers itself gets only the offer id; BillDog no longer signs it first or reports `promotional_offer_not_applied` for it.
+- Listens to `customerInfoStream` instead of taking RevenueCat's single delegate, so an app's own delegate no longer disconnects BillDog.
+- `switchUser(to:)` logs RevenueCat in, like `logIn`.
+- Win-back offers (iOS 18+) are redeemed through RevenueCat when the customer is eligible.
+- `restoreOnLaunch` only reads RevenueCat's customer info: no App Store sign-in prompt, no aliasing.
+- Distributed with Swift Package Manager only (`scripts/publish-ios-revenuecat-spm.sh`); CocoaPods trunk stops taking new pods on 2 December 2026.
+
+### Fixed — simulated purchases record the buyer's country
+
+- With `BillDogConfig.simulatedPurchases`, each purchase now sends the buyer's country to BillDog: the App Store storefront's (`Storefront.current?.countryCode`, alpha-3), else the device locale's region. Simulated purchases used to be recorded with no country, so Revenue by country showed them as Unknown. When no 2- or 3-letter country is known the field is left out, never guessed. Needs the server's `record-simulated-purchase` with `country` support (an older server ignores the field).
+
+### Added — Apple's monthly plan with a 12-month commitment
+
+- A yearly subscription's monthly-with-12-month-commitment billing plan (StoreKit, iOS 26.4+, not sold in the US or Singapore) is sold as its own product, `"<yearly-id>:monthly"` (RevenueCat's naming). `fetchProducts` / offerings resolve it from the yearly product's `pricingTerms`: `price`, `priceString` and `subscriptionPeriod` are the installment, and `StoreProduct.installmentsInfo` (`InstallmentsInfo`) carries the payment count, installment and total prices and both periods. `purchase(package:)` / `purchase(productId:)` buy it with `.billingPlanType(.monthly)`. Where the plan is not sold, the product is absent and a direct purchase throws `productNotAvailable`; it is never bought upfront.
+- `PurchaseParams.billingPlan` / `BillingPlan` (`.upfront`, `.monthlyCommitment`) and `PurchaseCapabilities.billingPlans`: a host `PurchaseController` receives a monthly-plan request only when it declares the capability. The RevenueCat adapter declares it and buys RevenueCat's `X:monthly` product (RevenueCat 5.76+).
+- `continueDeferredAppStorePromoPurchase(productId:billingPlan:)` resumes a deferred App Store promoted purchase on the monthly plan.
+- `EntitlementInfo.commitment` (`SubscriptionCommitment`: `expiresAt`, `willRenew`, `periodNumber`, `totalPeriods`). Paywall variables `product.isCommitment`, `commitmentPaymentsCount`, `installmentPrice`, `commitmentTotalPrice`, `commitmentPeriod` (+ raw values); best-offer ranking compares a commitment by its total. `purchase_completed` adds `billing_plan`.
+- Needs the SDK built with Xcode 26.5+ (Swift 6.3.2, the first SDK that declares the API); older toolchains compile the plan out. Guide: https://billdog.io/docs/commitment-plans
+
+### Changed — one survey at a time, and a reason when none is shown
+
+- `SurveyPresenter.present` shows one survey at a time. A request while another survey is open or loading is refused and the open survey is left alone: the refused request gets `onNotPresented(surveyId, "already_presenting")`, then `onDismiss`. A second request used to overwrite the open survey's handler, respondent and submit, so the two surveys crossed: the wrong respondent was abandoned and the wrong host was told.
+- New `SurveyPresentationHandler.onNotPresented: ((String, String) -> Void)?` (a defaulted `init` parameter, source-compatible), called before `onDismiss` whenever a survey is not shown. The reason is a `SurveyNotPresentedReason` constant (`alreadyPresenting`, `disabled`, `consent`, `showOnce`, `sampling`, `intercept`, `recurring`, `waitPeriod`, `displayConditions`, `notEligible`, `noPresenter`: the `snake_case` strings) or, when the server declined this user, the server's own reason (e.g. `audience_not_matched`), which used to arrive as a bare `onDismiss`. `onDismiss` still fires for every survey that is not shown. A journey's survey step reports `not_presented:<reason>`.
+- The presenter can't get stuck: when a survey's screen is gone (UIKit refused the present, or the app dismissed it in code), the next `present()` closes it as its Close button would (abandon, then `onDismiss`). A survey still loading is never treated as gone.
+- A pushed survey reports a Back-button or swipe-back pop as a close, in the native and web view renderers. A web view survey that dismisses itself after Submit now calls `onDismiss`; it used to skip the host.
+- `present` picks an on-screen view controller that isn't already presenting; with none (or a launcher with no window) it reports `no_presenter` instead of doing nothing. Re-opening a survey from its launcher makes that survey current, and a launcher tap refused because another survey is open no longer hides the button for good.
+
+### Fixed — web view surveys finish when a submit fails
+
+- The survey screen bundled in `BillDogSurvey` and `BillDogWebView` is rebuilt with the shared survey fix: after Submit a survey shows its thank-you screen, or a default "Thank you!"; a failed submit keeps the answers with a retry message and a **Close for now** button; closing while a submit is in flight ends as a dismiss instead of hanging.
+
+### Fixed — a paywall purchase applies the offer its own offering pins
+
+- A paywall tap names only a product, and the promotional offer (`appStorePromoOfferId`) applied came from the first loaded package selling it, current offering first. A paywall rendering another offering (a placement's, an experiment arm's) that pinned an offer for a product the current offering also sells charged full price, and an offer pinned in the current offering was applied to a paywall that pinned none. The purchase now takes the package in the offering the paywall rendered, as attribution already did, else the first match.
+
+### Fixed — `user.isEligibleForPromo` is no longer always `false`
+
+- The paywall variable was hard-coded `false`, so a component shown on it (the Builder's Promotional Offer Text) appeared only in the Builder preview. It is now `true` only when a purchase would apply the package's promotional offer for this customer: an offer is pinned (the package's `appStorePromoOfferId`, else the paywall's `promoOfferIdentifier`), the App Store lists it for the product, and the customer has subscribed in the group before (StoreKit lists promotional offers to everyone; Apple meant them for current and lapsed subscribers). Unknown history counts as not eligible, and StoreKit is asked for at most 500 ms. Native and web view paywalls both read it.
+
 ## [1.1.1-beta.5] - 2026-11-03
 
 ### Added — the Superwall bridge ships
