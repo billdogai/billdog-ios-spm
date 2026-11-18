@@ -30,13 +30,13 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "BillDogFull",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.5/BillDogFull.xcframework.zip",
-            checksum: "518311f85d952c49a65af94647cebefb7609d7eead0bc6579d0d353085458a76"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.2-beta.5/BillDogFull.xcframework.zip",
+            checksum: "7b84ed1fa8b68165f2e3e226c1edd6a0489f54f24c8b3a59eecf1a29d373959c"
         ),
         .binaryTarget(
             name: "BillDogEng",
-            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.1-beta.5/BillDogEng.xcframework.zip",
-            checksum: "675071296f734e0be24a36ad0448a2c2aab082f47f5389f4fa73c89623153882"
+            url: "https://github.com/billdogai/billdog-ios-spm/releases/download/v1.1.2-beta.5/BillDogEng.xcframework.zip",
+            checksum: "f690d5126978b843c09a167180743fce86a508e53ecfecda71c3fa0e218a0c82"
         )
     ]
 )

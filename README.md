@@ -8,7 +8,7 @@
 
 [BillDog](https://billdog.io) is an all-in-one Monetization, Engagement, and Data platform built for mobile applications. It combines **Paywalls & Billing**, **Product Analytics**, **Session Replay**, **In-App Messaging**, **Push**, and **Surveys** into a single package.
 
-Current release: **`1.1.1-beta.5`**
+Current release: **`1.1.2-beta.5`**
 
 ---
 
@@ -60,7 +60,7 @@ This repository distributes the SDK as **binary XCFrameworks**. There are two pr
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.1-beta.5")
+    .package(url: "https://github.com/billdogai/billdog-ios-spm.git", from: "1.1.2-beta.5")
 ]
 ```
 
@@ -76,14 +76,18 @@ In Xcode:
 
 1. **File** → **Add Package Dependencies…**
 2. Enter `https://github.com/billdogai/billdog-ios-spm.git`
-3. Choose **Exact Version** `1.1.1-beta.5` (pre-release versions are not picked up by "Up to Next Major").
+3. Choose **Exact Version** `1.1.2-beta.5` (pre-release versions are not picked up by "Up to Next Major").
 4. Add **either** `BillDogFull` **or** `BillDogEng` to your app target.
 
 `BillDogFull` transitively resolves [lottie-ios](https://github.com/airbnb/lottie-ios) 4.4.0+ for animated paywall content. `BillDogEng` has no third-party dependencies.
 
 ### CocoaPods
 
-Not published yet. The beta is SPM-only.
+```ruby
+pod 'BillDogFull', '<version>'   # or 'BillDogEng'; name the exact pre-release version
+```
+
+**CocoaPods trunk stops accepting new pods on 2 December 2026.** BillDog versions released after that are on Swift Package Manager only: use SPM for a new project, and move a CocoaPods app to SPM to keep updating. React Native, Expo and Flutter apps are not affected: their pods download the SDK from the `billdog-ios-spm` releases themselves.
 
 ---
 
