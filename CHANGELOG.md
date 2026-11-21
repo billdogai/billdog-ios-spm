@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0-beta.1] - 2026-11-20
+
+### Fixed — `CustomerInfo.isPaused` is decoded
+
+- `CustomerInfo.isPaused` was always false: it was declared `let isPaused = false`, and Codable never decodes a `let` with an initial value, so the server's `isPaused` was dropped. It is now read from the answer (false when an older answer or cache has none). The pause is customer-wide, so a subscription paused on Google Play reads as paused on iOS too. `CustomerInfo.init` takes `isPaused:` (default false).
+
+### Fixed — billing retry is reported
+
+- `EntitlementInfo.isInBillingRetry` was always false: the server never sent the state. It now sends `state` `billing_retry` and a full `renewalInfo` (grace, billing retry, grace end, lifecycle state) for each entitlement backed by a subscription — this part works with earlier SDK versions too.
+- New `CustomerInfo.isInBillingRetry` and `billingIssueDetectedAt` (optional; nil from an older server). An App Store billing retry runs after access ended, when no entitlement is left to carry the flag, so the customer-level value is the one to read for "update your payment method" prompts.
+
+### Fixed — a host purchase the server refused is not a success
+
+- A purchase made by a host controller (RevenueCat, Superwall, the app's own code) whose recording `record-store-evidence` refused (`OWNED_BY_OTHER`, `BUNDLE_MISMATCH`, `SIGNED_TRANSACTION_REQUIRED`, …) now ends `.failed` (`purchaseOwnerConflict` or `receiptValidationError`), as BillDog's own purchases already did (H8). Before, the app and its paywall were told it succeeded although nothing was granted. A purchase the server holds, still queued or awaiting the store stays a success.
+- RevenueCat bridge: a RevenueCat `logIn` / `logOut` that failed is applied again before the next purchase or restore, so RevenueCat records it for BillDog's current user.
+
+### Fixed — a consumable a host finished first is recorded (React Native, Flutter, Expo)
+
+- An App Store transaction id whose signed transaction StoreKit no longer returns (RevenueCat's default completion mode finishes a consumable before the React Native or Flutter bridge sees it) is now posted with the device's signed AppTransaction (`app_transaction`, iOS 16+). The server looks the id up with the project's App Store In-App Purchase key and records it only when Apple's transaction carries the same `appTransactionId`, the Apple account that installed the app. Before this, such an id was refused for good (`SIGNED_TRANSACTION_REQUIRED`) and the purchase was never recorded. A transaction made by another Apple account is refused (`APP_TRANSACTION_MISMATCH`). Needs `record-store-evidence` from the same release; iOS 15 is unchanged.
+
 ## [1.1.2-beta.5] - 2026-11-18
 
 ### Fixed — a restore unlocks only what is active
